@@ -1,0 +1,27 @@
+{
+  "name": "assisted-job-apply",
+  "version": "1.0.0",
+  "description": "Human-in-the-loop assistant to search LinkedIn Jobs and fill Easy Apply forms with your own data — it never submits without your approval.",
+  "type": "commonjs",
+  "license": "MIT",
+  "keywords": [
+    "linkedin",
+    "job-search",
+    "playwright",
+    "automation",
+    "easy-apply"
+  ],
+  "scripts": {
+    "login": "node scripts/linkedin-login.js",
+    "verify": "node scripts/linkedin-verify.js",
+    "search": "node scripts/linkedin-search.js",
+    "detail": "node scripts/linkedin-job-detail.js",
+    "apply": "node scripts/linkedin-easyapply.js",
+    "pdf": "node scripts/md-to-pdf.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^26.1.1",
+    "markdown-it": "^14.3.0"
+  }
+}

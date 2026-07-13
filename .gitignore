@@ -1,0 +1,37 @@
+# Dependencies / environments
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Claude Code local settings
+.claude/
+
+# Secrets & personal data (NEVER commit)
+# .auth/ holds the LinkedIn session token created by scripts/linkedin-login.js
+.auth/
+# config/profile.json has your real name/email/phone/links
+config/profile.json
+
+# Personal folders: ignore contents, keep the placeholder README
+assets/*
+!assets/README.md
+output/*
+!output/README.md
+
+# Database (personal job history)
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# Playwright artifacts
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log

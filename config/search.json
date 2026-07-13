@@ -1,0 +1,34 @@
+{
+  "source": "linkedin",
+  "defaults": {
+    "remote": true,
+    "datePostedDays": 7,
+    "maxPerSearch": 25,
+    "locations": [
+      { "name": "Spain", "geoId": "105646813" }
+    ]
+  },
+  "searches": [
+    {
+      "tag": ".NET + AI/RAG",
+      "keywords": ".NET AI Engineer",
+      "note": "Best fit: C#/.NET with AI/RAG/LLM (Acopio, YAOCr)."
+    },
+    {
+      "tag": "Senior/Lead .NET",
+      "keywords": "Senior .NET Engineer",
+      "note": "Broad C#/.NET backend, senior/lead/staff."
+    },
+    {
+      "tag": "AI/ML Engineer (LLM)",
+      "keywords": "AI Engineer LLM RAG",
+      "note": "AI/ML roles centred on LLMs/RAG/vector search (C# or Python)."
+    },
+    {
+      "tag": "Software Engineer",
+      "keywords": "Software Engineer .NET",
+      "note": "Generalist remote SWE listing C#/.NET or AI as a plus."
+    }
+  ],
+  "_comment": "datePostedDays: 7=past week, 1=24h. remote maps to LinkedIn f_WT=2. Add {name,geoId} entries to locations to widen markets (e.g. European Union geoId 91000000). Remote-from-Spain eligibility is decided at triage time, not here."
+}

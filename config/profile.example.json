@@ -1,0 +1,76 @@
+{
+  "_README": "Copy this file to config/profile.json and fill in YOUR details. These answers auto-fill LinkedIn Easy Apply forms. config/profile.json is git-ignored so your personal data never gets committed. Nothing is ever submitted without your explicit approval.",
+
+  "full_name": "Your Name",
+  "first_name": "Your",
+  "last_name": "Name",
+  "email": "you@example.com",
+  "phone": "+00 000 000 000",
+  "phone_country_code": "+00",
+
+  "location_city": "Your City",
+  "location_country": "Your Country",
+
+  "links": {
+    "linkedin": "https://www.linkedin.com/in/your-handle/",
+    "github": "https://github.com/your-handle",
+    "website": "https://your-site.example"
+  },
+
+  "current_title": "Your Job Title",
+  "years_experience_total": 0,
+  "years_experience_dotnet": 0,
+  "years_experience_csharp": 0,
+  "years_experience_ai_llm": 0,
+
+  "work_authorization": {
+    "spain": true,
+    "eu": true,
+    "us": false,
+    "needs_sponsorship_eu": false,
+    "needs_sponsorship_us": true,
+    "note": "Set these to match your real situation. Determines how 'authorized to work' / 'sponsorship' questions are answered."
+  },
+
+  "remote_only": true,
+  "willing_to_relocate": false,
+  "remote_must_be_workable_from": "Your Country",
+
+  "salary": {
+    "currency": "EUR",
+    "minimum": 0,
+    "target": null,
+    "flexible": true,
+    "note": "Set your minimum. If flexible, expectations are answered as 'from <minimum> <currency>, negotiable'."
+  },
+
+  "notice_period": "Immediately available",
+
+  "languages": [
+    { "language": "Language A", "level": "Native" },
+    { "language": "Language B", "level": "Professional working proficiency" }
+  ],
+
+  "default_cv_pdf": "assets/CV.pdf",
+
+  "screening_answers": {
+    "authorized_to_work_in_spain": "Yes",
+    "authorized_to_work_in_eu": "Yes",
+    "require_visa_sponsorship_eu": "No",
+    "authorized_to_work_in_us": "No",
+    "comfortable_working_remotely": "Yes",
+    "years_of_csharp_dotnet": "0",
+    "years_of_ai_llm_experience": "0",
+    "highest_education": "Your highest education",
+    "notice_period_answer": "Immediate",
+    "salary_expectation": "From <minimum> <currency>, negotiable"
+  },
+
+  "compliance_defaults": {
+    "_note": "Standing answers for legal/compliance attestation questions on application forms. Adjust if any do not apply to you.",
+    "conflict_of_interest": "No",
+    "conflict_details_when_no": "N/A",
+    "accept_privacy_policy": "Yes",
+    "how_did_you_find_out": "LinkedIn"
+  }
+}
