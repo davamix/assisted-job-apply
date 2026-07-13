@@ -58,6 +58,7 @@ review page, writes `output/<jobId>/state.json`, and polls for a signal file you
 | `scripts/md-to-pdf.js` | Render a Markdown CV/cover letter to PDF (via Chromium). |
 | `db/jobs_db.py` | SQLite data layer + CLI. |
 | `db/ingest_search.py` | Load search JSON into the database. |
+| `web/app.py` | Local web **dashboard** over the database (stdlib only). |
 | `config/search.json` | Your searches + filters (committed example). |
 | `config/profile.example.json` | Template for your answers → copy to `config/profile.json`. |
 | `assets/` · `output/` · `data/` | Personal files — **git-ignored**; each has a README describing its contents. |
@@ -157,6 +158,28 @@ python db/jobs_db.py set-status --id <dbId> --status applied --notes "…"
 - `applied` / `aborted` / `timeout` — terminal.
 
 It polls for `APPROVE`/`ABORT` for `--timeoutMs` (default 15 min). See `output/README.md` for every artifact.
+
+## Dashboard (web UI)
+
+A small, local web view of the database — see every job at a glance, open its documents, filter, and
+**track each application through the interview process**:
+
+```bash
+python web/app.py                 # then open http://127.0.0.1:8000
+#   --port 8000   change the port
+#   --host 127.0.0.1  bind address (keep it local — it serves your personal DB and docs)
+```
+
+- **Filter** by status, market (`search_tag`), country, source, or a role/company text search; the
+  summary chips show live counts per status (click one to filter).
+- **Documents** — direct links to each job's cover / presentation letters and any tailored CV
+  (a `.md` cover letter links its rendered `.pdf` when present); your base CV in `assets/` is linked
+  in the header. Apply screenshots show up as 📎 evidence.
+- **Track status** — an inline dropdown changes a job's status through the funnel:
+  `found → prepared → applied → screening → call / technical / final interview → offer → accepted`,
+  with `rejected` / `withdrawn` / `on-hold` as outcomes. Notes are editable inline. Changes write
+  straight to `data/jobs.db` (same validation as the CLI), so the dashboard and `jobs_db.py` stay in
+  sync. Stdlib only — no `pip install`, no build step.
 
 ## Configuration
 

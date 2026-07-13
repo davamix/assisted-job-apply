@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Applications</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2029; --panel-2: #222b36; --border: #2c3644;
+    --text: #e6edf3; --muted: #8b98a5; --accent: #4493f8;
+    --neutral: #6b7684; --active: #3b82f6; --good: #22c55e; --bad: #ef4444; --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    padding: 18px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .total { color: var(--muted); font-size: 13px; }
+  header .spacer { flex: 1; }
+  header .base-docs { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  main { padding: 16px 24px 48px; }
+
+  .summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+    border-radius: 999px; background: var(--panel); border: 1px solid var(--border);
+    font-size: 12px; color: var(--muted); cursor: pointer; user-select: none;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip.active { color: var(--text); border-color: var(--accent); background: var(--panel-2); }
+  .chip .n { font-weight: 700; color: var(--text); }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+  }
+  .filters label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); }
+  select, input[type=search], textarea, button {
+    font: inherit; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px;
+  }
+  input[type=search] { min-width: 200px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .filters .grow { flex: 1; }
+  .btn-clear { align-self: flex-end; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; min-width: 900px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em;
+       position: sticky; top: 0; background: var(--panel); z-index: 1; }
+  tr:last-child td { border-bottom: none; }
+  tr.flash { animation: flash 1s ease; }
+  @keyframes flash { from { background: rgba(68,147,248,.25); } to { background: transparent; } }
+  td.id { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .role { font-weight: 600; }
+  .company { color: var(--muted); font-size: 13px; }
+  .meta-sub { color: var(--muted); font-size: 12px; }
+
+  select.status { border-left-width: 4px; font-weight: 600; }
+  .status-neutral { border-left-color: var(--neutral) !important; }
+  .status-active  { border-left-color: var(--active) !important; }
+  .status-good    { border-left-color: var(--good) !important; }
+  .status-bad     { border-left-color: var(--bad) !important; }
+  .status-warn    { border-left-color: var(--warn) !important; }
+
+  .docs { display: flex; flex-direction: column; gap: 3px; }
+  .docs a { color: var(--accent); text-decoration: none; font-size: 13px; }
+  .docs a:hover { text-decoration: underline; }
+  .docs .evidence { color: var(--muted); font-size: 12px; }
+  .docs .none { color: var(--muted); font-size: 12px; }
+
+  a.joblink { color: var(--accent); text-decoration: none; }
+  a.joblink:hover { text-decoration: underline; }
+
+  .notes { min-width: 170px; }
+  .notes .text { white-space: pre-wrap; color: var(--text); cursor: text; min-height: 20px; }
+  .notes .text.empty { color: var(--muted); font-style: italic; }
+  .notes textarea { width: 100%; min-height: 56px; resize: vertical; }
+  .notes .row { display: flex; gap: 6px; margin-top: 6px; }
+  .notes .row button { padding: 4px 10px; font-size: 12px; }
+
+  .empty-state { color: var(--muted); text-align: center; padding: 48px; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 16px; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  .toast.err { border-color: var(--bad); color: #fecaca; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Job Applications</h1>
+  <span class="total" id="total"></span>
+  <span class="spacer"></span>
+  <div class="base-docs" id="baseDocs"></div>
+</header>
+
+<main>
+  <div class="summary" id="summary"></div>
+
+  <div class="filters">
+    <label>Status
+      <select id="f-status"><option value="">All</option></select>
+    </label>
+    <label>Market
+      <select id="f-search_tag"><option value="">All</option></select>
+    </label>
+    <label>Country
+      <select id="f-country"><option value="">All</option></select>
+    </label>
+    <label>Source
+      <select id="f-source"><option value="">All</option></select>
+    </label>
+    <label class="grow">Search role / company
+      <input type="search" id="f-q" placeholder="e.g. AI, .NET, Wizeline…">
+    </label>
+    <button class="btn-clear" id="clear">Clear</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Role / Company</th><th>Market</th><th>Country</th>
+          <th>Status</th><th>Documents</th><th>Link</th><th>Updated</th><th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty-state" id="empty" style="display:none">No jobs match these filters.</div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---- status presentation -------------------------------------------------
+const STATUS_GROUP = {
+  found: "neutral", prepared: "neutral", skipped: "neutral", closed: "neutral", "external-logged": "neutral",
+  applied: "active", screening: "active", "call-interview": "active",
+  "technical-interview": "active", "final-interview": "active",
+  offer: "good", accepted: "good",
+  rejected: "bad", withdrawn: "bad", "on-hold": "warn",
+};
+const STATUS_LABEL = {
+  "external-logged": "External (logged)", "call-interview": "Call interview",
+  "technical-interview": "Technical interview", "final-interview": "Final interview",
+  "on-hold": "On hold / ghosted",
+};
+const GROUP_COLOR = { neutral: "var(--neutral)", active: "var(--active)", good: "var(--good)", bad: "var(--bad)", warn: "var(--warn)" };
+function label(s) { return STATUS_LABEL[s] || (s ? s.charAt(0).toUpperCase() + s.slice(1) : ""); }
+function group(s) { return STATUS_GROUP[s] || "neutral"; }
+
+let META = { statuses: [] };
+const el = (id) => document.getElementById(id);
+
+// ---- data ---------------------------------------------------------------
+async function loadMeta() {
+  META = await (await fetch("/api/meta")).json();
+  el("total").textContent = META.total + " jobs";
+  fillSelect("f-status", META.statuses, label);
+  fillSelect("f-search_tag", META.search_tags);
+  fillSelect("f-country", META.countries);
+  fillSelect("f-source", META.sources);
+  renderSummary();
+  renderBaseDocs();
+}
+
+function fillSelect(id, values, fmt) {
+  const sel = el(id), cur = sel.value;
+  sel.innerHTML = '<option value="">All</option>' +
+    values.map(v => `<option value="${escAttr(v)}">${esc(fmt ? fmt(v) : v)}</option>`).join("");
+  sel.value = cur;
+}
+
+function renderSummary() {
+  const counts = META.counts || {};
+  // Show every status that has rows, in funnel order, then any leftover.
+  const ordered = META.statuses.filter(s => counts[s]);
+  el("summary").innerHTML = ordered.map(s => {
+    const active = el("f-status").value === s ? " active" : "";
+    return `<span class="chip${active}" data-status="${escAttr(s)}">
+      <span class="dot" style="background:${GROUP_COLOR[group(s)]}"></span>
+      ${esc(label(s))} <span class="n">${counts[s]}</span></span>`;
+  }).join("");
+  el("summary").querySelectorAll(".chip").forEach(c => c.onclick = () => {
+    const s = c.dataset.status;
+    el("f-status").value = (el("f-status").value === s) ? "" : s;
+    loadJobs();
+  });
+}
+
+function renderBaseDocs() {
+  const docs = META.base_documents || [];
+  el("baseDocs").innerHTML = docs.length
+    ? '<span class="meta-sub">Base:</span> ' + docs.map(d => docLink(d)).join(" ")
+    : "";
+}
+
+async function loadJobs() {
+  const params = new URLSearchParams();
+  ["status", "search_tag", "country", "source", "q"].forEach(k => {
+    const v = el("f-" + k).value.trim();
+    if (v) params.set(k, v);
+  });
+  const jobs = await (await fetch("/api/jobs?" + params)).json();
+  renderRows(jobs);
+  renderSummary(); // reflect active status chip
+}
+
+// ---- rendering ----------------------------------------------------------
+function renderRows(jobs) {
+  el("empty").style.display = jobs.length ? "none" : "block";
+  el("rows").innerHTML = jobs.map(rowHtml).join("");
+  jobs.forEach(wireRow);
+}
+
+function rowHtml(j) {
+  return `<tr id="row-${j.id}">
+    <td class="id">${j.id}</td>
+    <td><div class="role">${esc(j.role || "—")}</div><div class="company">${esc(j.company || "")}</div></td>
+    <td class="meta-sub">${esc(j.search_tag || "")}</td>
+    <td class="meta-sub">${esc(j.country || "")}</td>
+    <td>${statusSelect(j)}</td>
+    <td>${docsHtml(j.documents)}</td>
+    <td>${j.job_url ? `<a class="joblink" href="${escAttr(j.job_url)}" target="_blank" rel="noopener">open ↗</a>` : ""}</td>
+    <td class="meta-sub">${esc(fmtDate(j.updated_at))}</td>
+    <td class="notes" data-id="${j.id}">${notesHtml(j)}</td>
+  </tr>`;
+}
+
+function statusSelect(j) {
+  const opts = META.statuses.map(s =>
+    `<option value="${escAttr(s)}"${s === j.status ? " selected" : ""}>${esc(label(s))}</option>`).join("");
+  return `<select class="status status-${group(j.status)}" data-id="${j.id}">${opts}</select>`;
+}
+
+function docsHtml(docs) {
+  if (!docs || !docs.length) return '<span class="docs"><span class="none">—</span></span>';
+  const main = docs.filter(d => d.group !== "evidence");
+  const evid = docs.filter(d => d.group === "evidence");
+  let html = '<span class="docs">' + main.map(d => docLink(d)).join("");
+  if (evid.length) html += `<span class="evidence">📎 ${evid.map(d => docLink(d)).join(" ")}</span>`;
+  return html + "</span>";
+}
+function docLink(d) {
+  return `<a href="${escAttr(d.url)}" target="_blank" rel="noopener">${esc(d.label)}</a>`;
+}
+
+function notesHtml(j) {
+  const txt = j.notes || "";
+  const cls = txt ? "text" : "text empty";
+  return `<div class="${cls}" data-id="${j.id}">${txt ? esc(txt) : "add note…"}</div>`;
+}
+
+// ---- interactions -------------------------------------------------------
+function wireRow(j) {
+  const sel = document.querySelector(`select.status[data-id="${j.id}"]`);
+  sel.onchange = async () => {
+    const ok = await patch(j.id, { status: sel.value });
+    if (ok) {
+      sel.className = "status status-" + group(sel.value);
+      flash(j.id);
+      loadMeta(); // refresh counts
+    }
+  };
+  const noteText = document.querySelector(`.notes .text[data-id="${j.id}"]`);
+  noteText.onclick = () => startEditNote(j);
+}
+
+function startEditNote(j) {
+  const cell = document.querySelector(`.notes[data-id="${j.id}"]`);
+  const current = j.notes || "";
+  cell.innerHTML = `<textarea>${esc(current)}</textarea>
+    <div class="row"><button class="save">Save</button><button class="cancel">Cancel</button></div>`;
+  const ta = cell.querySelector("textarea");
+  ta.focus(); ta.setSelectionRange(current.length, current.length);
+  cell.querySelector(".cancel").onclick = () => { cell.innerHTML = notesHtml(j); wireNote(j); };
+  cell.querySelector(".save").onclick = async () => {
+    const val = ta.value;
+    const ok = await patch(j.id, { notes: val });
+    if (ok) { j.notes = val; cell.innerHTML = notesHtml(j); wireNote(j); flash(j.id); }
+  };
+}
+function wireNote(j) {
+  const noteText = document.querySelector(`.notes .text[data-id="${j.id}"]`);
+  if (noteText) noteText.onclick = () => startEditNote(j);
+}
+
+async function patch(id, body) {
+  try {
+    const res = await fetch(`/api/jobs/${id}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.error || "Update failed", true); return false; }
+    toast("Saved");
+    return true;
+  } catch (e) { toast(String(e), true); return false; }
+}
+
+function flash(id) {
+  const row = el("row-" + id);
+  if (!row) return;
+  row.classList.remove("flash"); void row.offsetWidth; row.classList.add("flash");
+}
+
+let toastTimer;
+function toast(msg, err) {
+  const t = el("toast");
+  t.textContent = msg; t.className = "toast show" + (err ? " err" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = "toast", 1800);
+}
+
+// ---- utils --------------------------------------------------------------
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function escAttr(s) { return esc(s); }
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// ---- boot ---------------------------------------------------------------
+["status", "search_tag", "country", "source"].forEach(k => el("f-" + k).onchange = loadJobs);
+let qTimer;
+el("f-q").oninput = () => { clearTimeout(qTimer); qTimer = setTimeout(loadJobs, 250); };
+el("clear").onclick = () => {
+  ["status", "search_tag", "country", "source", "q"].forEach(k => el("f-" + k).value = "");
+  loadJobs();
+};
+
+(async function init() { await loadMeta(); await loadJobs(); })();
+</script>
+</body>
+</html>

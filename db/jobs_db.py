@@ -34,7 +34,18 @@ WRITABLE = [
     "presentation_letter_path", "notes", "status", "search_tag", "applied_at",
 ]
 
-VALID_STATUS = {"found", "prepared", "applied", "skipped", "closed", "external-logged"}
+# Ordered application funnel. Single source of truth for both status validation
+# (VALID_STATUS) and the web dashboard's ordering/coloring of the status dropdown.
+# The pipeline scripts only ever set found/prepared/applied/skipped/external-logged;
+# the interview stages and terminal states are set manually via the dashboard/CLI.
+STATUS_ORDER = [
+    "found", "prepared", "applied",
+    "screening", "call-interview", "technical-interview", "final-interview",
+    "offer", "accepted",
+    "rejected", "withdrawn", "on-hold",
+    "skipped", "closed", "external-logged",
+]
+VALID_STATUS = set(STATUS_ORDER)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (

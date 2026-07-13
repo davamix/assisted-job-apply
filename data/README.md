@@ -22,7 +22,7 @@ Portal-agnostic: an internal auto-increment `id` is the primary key (and names t
 | `job_url` | direct link to the posting |
 | `cv_path`, `cover_letter_path`, `presentation_letter_path` | relative paths into `output/<id>/` (null if none) |
 | `notes` | free-text observations (fit, remote eligibility, "closed for application", etc.) |
-| `status` | `found` → `prepared` → `applied` / `skipped` / `closed` / `external-logged` |
+| `status` | funnel: `found` → `prepared` → `applied` → `screening` → `call-interview` → `technical-interview` → `final-interview` → `offer` → `accepted`; outcomes `rejected` / `withdrawn` / `on-hold`; plus `skipped` / `closed` / `external-logged` (full list = `jobs_db.STATUS_ORDER`) |
 | `search_tag` | which configured search surfaced it |
 | `created_at`, `updated_at`, `applied_at` | timestamps |
 
