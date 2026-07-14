@@ -7,7 +7,7 @@ Nothing here is uploaded to the repository.
 
 | File | Format | Purpose |
 |------|--------|---------|
-| `CV.md` | Markdown | Editable source of your CV. Used to render tailored PDFs via `scripts/md-to-pdf.js`, and as context when drafting cover letters / adapting the CV. |
+| `CV.md` | Markdown | Editable source of your CV. Used to render tailored PDFs via `scripts/common/md-to-pdf.js`, and as context when drafting cover letters / adapting the CV. |
 | `CV.pdf` | PDF (ATS-friendly) | The resume file attached when a form needs a file upload. Point `default_cv_pdf` in `config/profile.json` at this path. |
 
 You can name the files anything you like — just make `config/profile.json` → `default_cv_pdf`

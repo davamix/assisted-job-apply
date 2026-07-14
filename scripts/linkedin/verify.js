@@ -3,7 +3,7 @@ const { chromium } = require('@playwright/test');
 const path = require('path');
 
 (async () => {
-  const authFile = process.argv[2] || path.join(__dirname, '..', '.auth', 'linkedin-state.json');
+  const authFile = process.argv[2] || path.join(__dirname, '..', '..', '.auth', 'linkedin-state.json');
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ storageState: authFile });
   const page = await context.newPage();

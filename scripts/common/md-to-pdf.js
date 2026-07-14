@@ -1,6 +1,6 @@
 // Render a Markdown file to a clean, ATS-friendly A4 PDF using the Chromium that
 // Playwright already ships (no pandoc/LaTeX needed).
-// Usage: node scripts/md-to-pdf.js --in "output/7/CV.md" --out "/tmp/CV.pdf" [--title "Your Name"]
+// Usage: node scripts/common/md-to-pdf.js --in "output/7/CV.md" --out "/tmp/CV.pdf" [--title "Your Name"]
 const { chromium } = require('@playwright/test');
 const MarkdownIt = require('markdown-it');
 const fs = require('fs');

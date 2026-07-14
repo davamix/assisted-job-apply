@@ -1,7 +1,7 @@
 // Fetch triage detail for one LinkedIn job. LinkedIn's logged-in markup uses hashed
 // class names, so we anchor on stable signals: the "About the job" heading (its next
 // sibling holds the description) and the apply button's aria-label.
-// Usage: node scripts/linkedin-job-detail.js --id 4436660607 [--headed] [--captureExternal]
+// Usage: node scripts/linkedin/job-detail.js --id 4436660607 [--headed] [--captureExternal]
 // title/company are taken from the search card upstream; this returns description, apply
 // state, salary hint, and open/closed/already-applied flags.
 const { chromium } = require('@playwright/test');
@@ -21,7 +21,7 @@ function parseArgs(argv) {
 (async () => {
   const a = parseArgs(process.argv);
   if (!a.id) { console.error(JSON.stringify({ error: 'missing --id' })); process.exit(2); }
-  const authFile = a.auth || path.join(__dirname, '..', '.auth', 'linkedin-state.json');
+  const authFile = a.auth || path.join(__dirname, '..', '..', '.auth', 'linkedin-state.json');
   const url = `https://www.linkedin.com/jobs/view/${a.id}/`;
 
   const browser = await chromium.launch({ headless: !a.headed });

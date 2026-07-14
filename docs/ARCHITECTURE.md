@@ -14,16 +14,19 @@ against LinkedIn's obfuscated UI. For setup/usage see the top-level [README](../
    text anchors**, and **runtime-injected `data-ez-*` attributes** — never CSS class names.
 4. **Separation of concerns.** Browser automation is Node/Playwright; the datastore is Python/SQLite.
    They communicate through JSON files, so either side can be swapped or scripted independently.
+5. **Per-site adapters over shared utilities.** Scripts are organized as `scripts/<site>/` adapters
+   (LinkedIn = full pipeline; BambooHR = apply only) over `scripts/common/` (PDF rendering, the
+   CV-vs-Résumé field classifier). The DB is portal-agnostic. See [scripts/README.md](../scripts/README.md).
 
 ## Components
 
-### Session (`linkedin-login.js`, `linkedin-verify.js`)
+### Session (`linkedin/login.js`, `linkedin/verify.js`)
 `login` launches a **headed** browser at the LinkedIn login page and polls for the `li_at` session
 cookie (so it transparently handles 2FA). Once present, it saves `context.storageState()` to
 `.auth/linkedin-state.json`. Every other script loads that file via
 `browser.newContext({ storageState })`. `verify` loads it and confirms the feed is reachable.
 
-### Search (`linkedin-search.js`)
+### Search (`linkedin/search.js`)
 Builds a Jobs search URL from CLI flags (`keywords`, `location`, `geoId`, `f_WT=2` for remote,
 `f_TPR` for date posted, `start` for pagination), scrolls the virtualized results list to load
 cards, then extracts `{ source_job_id, role, company, location, url }` per card. Job ids come from
@@ -33,7 +36,7 @@ the stable `data-occludable-job-id` / `data-job-id` attribute or the `/jobs/view
 Reads a search's JSON array and upserts each row as `status=found`, parsing the country out of the
 location string. Dedups on `(source, source_job_id)`.
 
-### Triage (`linkedin-job-detail.js`)
+### Triage (`linkedin/job-detail.js`)
 Opens a single posting and extracts, **without relying on class names**:
 - **Description** — finds the element whose text is exactly *"About the job"* (or localized
   equivalents) and takes its next sibling's text (the description body). Falls back to the largest
@@ -42,7 +45,7 @@ Opens a single posting and extracts, **without relying on class names**:
   `easy_apply`; otherwise `external`). Detects `closed` and `already_applied` from page text.
 - **Salary hint** — regex over the description for currency/pay patterns.
 
-### Apply driver (`linkedin-easyapply.js`)
+### Apply driver (`linkedin/easyapply.js`)
 The most involved component. A step loop drives the multi-page Easy Apply modal:
 
 1. **Locate the modal & enumerate fields.** In-page, it finds the modal root (nearest ancestor of a
@@ -70,10 +73,30 @@ The most involved component. A step loop drives the multi-page Easy Apply modal:
 Events are emitted as `EVENT {json}` lines to stdout and mirrored into `state.json`, so an
 orchestrator (or you) can watch progress and read the filled-field log.
 
-### PDF rendering (`md-to-pdf.js`)
+### External apply adapters (`bamboohr/apply.js`)
+External ATS portals (reached via the "Apply on company website" link found during triage) get
+their own **apply-only** adapter. BambooHR's fills text fields, Country/State (native hidden
+`<select>`s), and the Yes/No screening radios from the job's `answers.json` (`screening` map),
+screenshots the form, then keeps the browser **open** and waits for a `CLOSE` signal — the human
+solves the reCAPTCHA and clicks Submit. It never auto-submits. Quirks it works around: custom
+"Fabric" dropdowns that reject native `selectOption` (Address left to the human), and a
+`nickname_hpcsaf` honeypot left blank. The `probe-fields.js` / `probe-questions.js` scripts are the
+read-only reconnaissance used to build a job's `answers.json`.
+
+### Document handling: CV vs Résumé (`common/classify-doc-field.js`)
+Some employers ask for a **Résumé** (shorter, US-style) rather than a full **CV**. Before uploading,
+an apply adapter reads the file field's label and classifies it (`'cv' | 'resume' | 'unknown'`; CV
+wins when both are mentioned). For a **CV** it attaches the default or an adapted `output/<id>/CV.pdf`;
+for a **Résumé** it attaches `output/<id>/resume.pdf`, authored on demand (Markdown condensed from the
+CV, tailored to the role, rendered like a cover letter). If the form asks specifically for a Résumé
+and none exists yet, the adapter emits `needs-resume` and refuses to attach the CV to a résumé slot —
+you author the résumé, then re-run. `answers.json` carries `resume_upload` + `resume_doc_type`; the
+Markdown is durable (linked in the dashboard) and the PDF is transient.
+
+### PDF rendering (`common/md-to-pdf.js`)
 Markdown → HTML (`markdown-it`) → PDF using the Chromium that Playwright already ships
-(`page.pdf()`), with print CSS tuned for a clean, ATS-friendly one-column resume/letter. No LaTeX,
-pandoc, or system PDF tooling required.
+(`page.pdf()`), with print CSS tuned for a clean, ATS-friendly one-column resume/letter. Renders CVs,
+cover letters, and on-demand résumés alike. No LaTeX, pandoc, or system PDF tooling required.
 
 ### Datastore (`db/jobs_db.py`)
 Standard-library `sqlite3`. Single `jobs` table with an internal auto-increment `id` (also the
@@ -88,10 +111,12 @@ reads it, writes screenshots + `state.json`, waits for your `APPROVE`/`ABORT` fi
 result in the **DB**.
 
 ## Extending it
-- **New questions:** add a `{ re, key }` entry to `RULES` in `linkedin-easyapply.js` and the matching
+- **New questions:** add a `{ re, key }` entry to `RULES` in `linkedin/easyapply.js` and the matching
   key to your answers.
-- **New job board:** the DB is portal-agnostic (`source` + `source_job_id`). Add a `<board>-search.js`
-  + `<board>-easyapply.js` that emit the same JSON shapes; the DB layer is unchanged.
+- **New job board:** the DB is portal-agnostic (`source` + `source_job_id`). Add a `scripts/<board>/`
+  adapter implementing the capabilities it supports (external ATS sites are usually apply-only) that
+  emits the same JSON shapes; the DB layer is unchanged. See the adapter contract in
+  [scripts/README.md](../scripts/README.md).
 - **When a selector breaks:** open the page headed, run a small `page.evaluate` probe that dumps
   candidate elements' tag/text/attributes (the approach used to build these scripts), and update the
   anchor — prefer accessible text/roles over class names.

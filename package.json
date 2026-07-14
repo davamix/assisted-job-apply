@@ -12,12 +12,13 @@
     "easy-apply"
   ],
   "scripts": {
-    "login": "node scripts/linkedin-login.js",
-    "verify": "node scripts/linkedin-verify.js",
-    "search": "node scripts/linkedin-search.js",
-    "detail": "node scripts/linkedin-job-detail.js",
-    "apply": "node scripts/linkedin-easyapply.js",
-    "pdf": "node scripts/md-to-pdf.js"
+    "login": "node scripts/linkedin/login.js",
+    "verify": "node scripts/linkedin/verify.js",
+    "search": "node scripts/linkedin/search.js",
+    "detail": "node scripts/linkedin/job-detail.js",
+    "apply": "node scripts/linkedin/easyapply.js",
+    "apply:bamboohr": "node scripts/bamboohr/apply.js",
+    "pdf": "node scripts/common/md-to-pdf.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
