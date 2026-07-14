@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest linkedin-search.js JSON output into the jobs DB as status=found rows.
+"""Ingest linkedin/search.js JSON output into the jobs DB as status=found rows.
 
 Usage:
   python db/ingest_search.py --file search-out.json --tag ".NET + AI/RAG" [--source linkedin]

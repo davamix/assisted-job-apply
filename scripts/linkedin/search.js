@@ -1,6 +1,6 @@
 // Scrape one LinkedIn Jobs search (remote) into JSON job cards.
 // Usage:
-//   node scripts/linkedin-search.js --keywords ".NET AI Engineer" \
+//   node scripts/linkedin/search.js --keywords ".NET AI Engineer" \
 //        --location "Spain" --geoId 105646813 --tpr r604800 --remote \
 //        --start 0 --max 25 [--headed] [--out file.json]
 // Prints a JSON array of { source_job_id, role, company, location, url } to stdout.
@@ -32,7 +32,7 @@ function buildUrl(a) {
 
 (async () => {
   const a = parseArgs(process.argv);
-  const authFile = a.auth || path.join(__dirname, '..', '.auth', 'linkedin-state.json');
+  const authFile = a.auth || path.join(__dirname, '..', '..', '.auth', 'linkedin-state.json');
   const url = buildUrl(a);
 
   const browser = await chromium.launch({ headless: !a.headed });

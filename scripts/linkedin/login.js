@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 (async () => {
-  const authFile = process.argv[2] || path.join(__dirname, '..', '.auth', 'linkedin-state.json');
+  const authFile = process.argv[2] || path.join(__dirname, '..', '..', '.auth', 'linkedin-state.json');
   fs.mkdirSync(path.dirname(authFile), { recursive: true });
 
   const browser = await chromium.launch({ headless: false });

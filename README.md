@@ -20,25 +20,28 @@ everything.
 - 🔎 **Search** LinkedIn Jobs (remote, date-posted, location filters) and scrape the result cards.
 - 🗃️ **Store** every job in a portal-agnostic **SQLite** database (dedup, status tracking).
 - 🔬 **Triage** each posting: full description, Easy-Apply vs. external, open/closed, already-applied, salary hints.
-- ✍️ **Prepare** a tailored cover letter (and optionally an adapted CV → PDF).
+- ✍️ **Prepare** a tailored cover letter, and the right document to attach: your **CV**, or a
+  **Résumé** created on demand (shorter, US-style, tailored to the role) when a form asks for one.
 - ✅ **Apply** through the multi-step Easy Apply form — filling contact info, screening questions,
   compliance attestations, selecting the right resume, uploading a cover letter — then **stopping at
   the review page for your approval**.
+- 🏢 **External ATS portals** (BambooHR today) have their own *apply adapters* that fill the company
+  form and pause for you to solve the reCAPTCHA and submit — same never-auto-submit rule.
 
 ## How it works
 
 ```
-config/search.json ─▶ linkedin-search.js ─▶ ingest_search.py ─▶ [ SQLite: found ]
+config/search.json ─▶ linkedin/search.js ─▶ ingest_search.py ─▶ [ SQLite: found ]
                                                                         │
-                                                     linkedin-job-detail.js (triage)
+                                                     linkedin/job-detail.js (triage)
                                                                         │  (you decide fit)
                                                                         ▼
-                                    md-to-pdf.js ◀─ cover letter / CV ─ [ prepared ]
+                          common/md-to-pdf.js ◀─ cover letter / CV / résumé ─ [ prepared ]
                                                                         │
-                                                     linkedin-easyapply.js (headed)
+                                        linkedin/easyapply.js  ·OR·  bamboohr/apply.js (headed)
                                                         fills every step … then PAUSES
                                                                         │
-                                          you review screenshot ▶ create APPROVE / ABORT
+                                          you review screenshot ▶ create APPROVE / ABORT / CLOSE
                                                                         │
                                                                  [ applied ] ─▶ SQLite
 ```
@@ -50,12 +53,15 @@ review page, writes `output/<jobId>/state.json`, and polls for a signal file you
 
 | Path | What it is |
 |------|-----------|
-| `scripts/linkedin-login.js` | One-time manual login; saves the session to `.auth/`. |
-| `scripts/linkedin-verify.js` | Sanity-check that the saved session still works. |
-| `scripts/linkedin-search.js` | Scrape one job search into JSON. |
-| `scripts/linkedin-job-detail.js` | Fetch one job's full detail for triage. |
-| `scripts/linkedin-easyapply.js` | Fill an Easy Apply form and pause for approval. |
-| `scripts/md-to-pdf.js` | Render a Markdown CV/cover letter to PDF (via Chromium). |
+| `scripts/linkedin/login.js` | One-time manual login; saves the session to `.auth/`. |
+| `scripts/linkedin/verify.js` | Sanity-check that the saved session still works. |
+| `scripts/linkedin/search.js` | Scrape one job search into JSON. |
+| `scripts/linkedin/job-detail.js` | Fetch one job's full detail for triage. |
+| `scripts/linkedin/easyapply.js` | Fill an Easy Apply form and pause for approval. |
+| `scripts/bamboohr/apply.js` | Fill a BambooHR external form and pause for you to submit. |
+| `scripts/common/md-to-pdf.js` | Render a Markdown CV/cover letter/résumé to PDF (via Chromium). |
+| `scripts/common/classify-doc-field.js` | Classify an upload field as asking for a CV vs a Résumé. |
+| `scripts/README.md` | Script layout, capability matrix, and the per-site adapter contract. |
 | `db/jobs_db.py` | SQLite data layer + CLI. |
 | `db/ingest_search.py` | Load search JSON into the database. |
 | `web/app.py` | Local web **dashboard** over the database (stdlib only). |
@@ -101,14 +107,14 @@ Run everything **from the project root** (so Node resolves `node_modules`).
 
 **1. Log in (once):**
 ```bash
-node scripts/linkedin-login.js
+node scripts/linkedin/login.js
 # a browser opens — log in manually (incl. 2FA). The session saves to .auth/linkedin-state.json.
-node scripts/linkedin-verify.js        # optional: confirm it works
+node scripts/linkedin/verify.js        # optional: confirm it works
 ```
 
 **2. Search and store:**
 ```bash
-node scripts/linkedin-search.js --keywords ".NET AI Engineer" \
+node scripts/linkedin/search.js --keywords ".NET AI Engineer" \
      --location "Spain" --geoId 105646813 --tpr r604800 --remote --max 25 \
      --out search.json
 python db/ingest_search.py --file search.json --tag ".NET + AI/RAG"
@@ -120,7 +126,7 @@ python db/ingest_search.py --file search.json --tag ".NET + AI/RAG"
 
 **3. Triage a job:**
 ```bash
-node scripts/linkedin-job-detail.js --id <linkedinJobId>
+node scripts/linkedin/job-detail.js --id <linkedinJobId>
 # returns description, apply_type (easy_apply | external | closed | already_applied), salary hint…
 ```
 Decide fit, then record it, e.g.:
@@ -130,12 +136,15 @@ python db/jobs_db.py set-status --id <dbId> --status skipped --notes "below sala
 
 **4. Prepare artifacts** (optional): write `output/<dbId>/Cover letter.md`, then
 ```bash
-node scripts/md-to-pdf.js --in "output/<dbId>/Cover letter.md" --out "output/<dbId>/Cover letter.pdf"
+node scripts/common/md-to-pdf.js --in "output/<dbId>/Cover letter.md" --out "output/<dbId>/Cover letter.pdf"
 ```
+If a form asks specifically for a **Résumé** (not a CV), write a shorter, role-tailored
+`output/<dbId>/resume.md` (condensed from your CV) and render it the same way to `resume.pdf`;
+point `answers.json` → `resume_upload` at that PDF. See [scripts/README.md](scripts/README.md).
 
 **5. Apply (human-gated):**
 ```bash
-node scripts/linkedin-easyapply.js --id <linkedinJobId> \
+node scripts/linkedin/easyapply.js --id <linkedinJobId> \
      --answers "output/<dbId>/answers.json" --signalDir "output/<dbId>"
 ```
 It opens a **visible** browser, fills every step, and stops at the review page. Watch it, check
@@ -152,7 +161,7 @@ python db/jobs_db.py set-status --id <dbId> --status applied --notes "…"
 ```
 
 ### The approval protocol
-`linkedin-easyapply.js` writes `output/<jobId>/state.json` with a `status`:
+`linkedin/easyapply.js` writes `output/<jobId>/state.json` with a `status`:
 - `ready_for_approval` — everything filled; waiting for you.
 - `needs_input` — a required field it couldn't answer; complete it in the live browser, then `APPROVE`.
 - `applied` / `aborted` / `timeout` — terminal.
@@ -172,9 +181,9 @@ python web/app.py                 # then open http://127.0.0.1:8000
 
 - **Filter** by status, market (`search_tag`), country, source, or a role/company text search; the
   summary chips show live counts per status (click one to filter).
-- **Documents** — direct links to each job's cover / presentation letters and any tailored CV
-  (a `.md` cover letter links its rendered `.pdf` when present); your base CV in `assets/` is linked
-  in the header. Apply screenshots show up as 📎 evidence.
+- **Documents** — direct links to each job's cover / presentation letters, any tailored CV, and an
+  on-demand **Résumé** when one was created (a `.md` links its rendered `.pdf` when present); your
+  base CV in `assets/` is linked in the header. Apply screenshots show up as 📎 evidence.
 - **Track status** — an inline dropdown changes a job's status through the funnel:
   `found → prepared → applied → screening → call / technical / final interview → offer → accepted`,
   with `rejected` / `withdrawn` / `on-hold` as outcomes. Notes are editable inline. Changes write
@@ -197,8 +206,11 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 
 ## Customization
 
-- **Form field matching** lives in `scripts/linkedin-easyapply.js` as a `RULES` array (label
+- **Form field matching** lives in `scripts/linkedin/easyapply.js` as a `RULES` array (label
   regex → answer key). Add rules for questions specific to your field.
+- **Adding a job board** — scripts are organized as per-site *adapters* (`scripts/<site>/`) over
+  shared `scripts/common/` utilities. See [scripts/README.md](scripts/README.md) for the layout,
+  capability matrix, and adapter contract; `scripts/bamboohr/` is a worked example (apply only).
 - **Compliance defaults** (all conflict questions → "No", accept policy, "found via LinkedIn",
   never auto-follow the company) are applied automatically and shown on the review screen before you approve.
 - **Headed vs. headless**: search/detail default to headless; the apply driver is headed so you can watch.
@@ -208,9 +220,11 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 - LinkedIn's logged-in DOM is **heavily obfuscated** (hashed class names). The scripts rely on
   accessible labels/roles and stable text anchors, but LinkedIn changes its UI often — if a
   selector breaks, the diagnostic pattern in `docs/ARCHITECTURE.md` shows how to inspect and fix it.
-- **External application sites** (Workday, Greenhouse, etc.) are intentionally **not auto-filled** by
-  default — they're logged so you can complete them manually.
-- If the session expires, just re-run `linkedin-login.js`.
+- **External application sites** — most (Workday, Greenhouse, etc.) are logged for you to complete
+  manually, but supported portals have an *apply adapter* under `scripts/<site>/` (BambooHR today:
+  `node scripts/bamboohr/apply.js --url <careers-url> --id <dbId> --answers output/<dbId>/answers.json`).
+  Adapters fill the form and pause — you solve the reCAPTCHA and submit (never auto-submitted).
+- If the session expires, just re-run `linkedin/login.js`.
 - Run scripts from the project root; if you must run from elsewhere, set `NODE_PATH` to the project's `node_modules`.
 
 ## License

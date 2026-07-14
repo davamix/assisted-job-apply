@@ -9,7 +9,7 @@ __pycache__/
 .claude/
 
 # Secrets & personal data (NEVER commit)
-# .auth/ holds the LinkedIn session token created by scripts/linkedin-login.js
+# .auth/ holds the LinkedIn session token created by scripts/linkedin/login.js
 .auth/
 # config/profile.json has your real name/email/phone/links
 config/profile.json

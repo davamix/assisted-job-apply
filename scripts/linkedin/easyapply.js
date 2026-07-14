@@ -6,7 +6,7 @@
 // field enumeration (keeps us away from the page's nav search input).
 //
 // Usage:
-//   node scripts/linkedin-easyapply.js --id <jobId> --answers <answers.json> \
+//   node scripts/linkedin/easyapply.js --id <jobId> --answers <answers.json> \
 //        --signalDir <dir> [--shotDir <dir>] [--timeoutMs 900000] [--headless]
 //
 // It runs headed by default (you watch it). It emits `EVENT {json}` lines and writes
@@ -46,6 +46,11 @@ const RULES = [
   { re: /linkedin profile|linkedin( |-)?url|perfil de linkedin/i, key: 'linkedin' },
   { re: /^\s*website\s*$|personal website|portfolio|sitio web|página web/i, key: 'website' },
   { re: /\bcity\b|ciudad|localidad/i, key: 'city' },
+  // Threshold Yes/No experience question for the core stack (.NET/C#): phrased as a
+  // yes/no ("do you have +5 years of .NET?"), so the numeric years_dotnet won't fit as a
+  // radio answer. Must precede the numeric rule below. Handled specially in resolveAnswer:
+  // answers Yes when the asked threshold is within the candidate's .NET years, else pauses.
+  { re: /(tienes|cuentas con|posees|dispones de|do you have|have you|al menos|at least|m[aá]s de|more than|minimum|m[ií]nimo|\+\s*\d|\d\s*\+).*(experiencia|experience|años|years).*(c#|\.net|dotnet)/i, key: '__dotnet_exp', choice: true },
   { re: /(years|años).*(c#|\.net|dotnet)/i, key: 'years_dotnet' },
   { re: /python/i, key: 'years_python' },
   { re: /pytorch|tensorflow|keras|scikit/i, key: 'years_pytorch' },
@@ -71,6 +76,15 @@ function resolveAnswer(label, ans) {
         return { value: ans.authorized_spain || 'Yes', choice: true };
       }
       if (r.key === 'sponsorship') return { value: ans.sponsorship || 'No', choice: true };
+      if (r.key === '__dotnet_exp') {
+        // Parse the asked threshold (e.g. "+5", "at least 3", "más de 5 años"); answer Yes
+        // only if it's within the candidate's .NET years, otherwise pause for a human.
+        const m = L.match(/(?:\+\s*|m[aá]s de\s*|al menos\s*|at least\s*|more than\s*|minimum\s*|m[ií]nimo\s*)(\d+)/) || L.match(/(\d+)\s*\+?\s*(?:años?|years?)/);
+        const need = m ? parseInt(m[1], 10) : 0;
+        const have = parseInt(ans.years_dotnet, 10) || 0;
+        if (need > have) return null;
+        return { value: 'Yes', choice: true };
+      }
       const v = ans[r.key];
       if (v !== undefined && v !== null && v !== '') return { value: String(v), choice: !!r.choice };
     }
@@ -158,7 +172,7 @@ function enumerateInPage() {
   const shotDir = a.shotDir || a.signalDir;
   fs.mkdirSync(a.signalDir, { recursive: true });
   fs.mkdirSync(shotDir, { recursive: true });
-  const authFile = a.auth || path.join(__dirname, '..', '.auth', 'linkedin-state.json');
+  const authFile = a.auth || path.join(__dirname, '..', '..', '.auth', 'linkedin-state.json');
   const writeState = (o) => fs.writeFileSync(path.join(a.signalDir, 'state.json'), JSON.stringify(o, null, 2), 'utf8');
 
   const browser = await chromium.launch({ headless: !!a.headless });

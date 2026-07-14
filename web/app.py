@@ -171,6 +171,14 @@ def resolve_documents(row):
         for name in ("Cover letter.pdf", "Cover letter.md"):
             label = "Cover letter (PDF)" if name.endswith(".pdf") else "Cover letter (MD)"
             add(f"output/{row['id']}/{name}", label)
+        # Per-job résumé / adapted CV (authored on demand; Markdown is durable, PDF transient).
+        for name, label in (
+            ("resume.pdf", "Résumé (PDF)"),
+            ("resume.md", "Résumé (MD)"),
+            ("CV.pdf", "CV (PDF)"),
+            ("CV.md", "CV (MD)"),
+        ):
+            add(f"output/{row['id']}/{name}", label)
         for name in sorted(os.listdir(outdir)):
             if name.lower().endswith(".png"):
                 add(f"output/{row['id']}/{name}", name, group="evidence")
