@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{{title}}</title>
+<style>
+  /* Landing on one page beats looking roomy: a résumé that spills three lines
+     onto a second page is the worst of both. Horizontal margins stay generous
+     (16mm) to keep the line length readable; the vertical ones buy the fit. */
+  @page { size: A4; margin: 13mm 16mm; }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: "Calibri", "Segoe UI", Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 10.5pt;
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  /* Letterhead — same as cv.html and letter.html so all three arrive as one set.
+     The résumé's line also carries location, and its role is per-application. */
+  .letterhead {
+    border-bottom: 1.5px solid #0b3d5c;
+    padding-bottom: 6pt;
+    margin-bottom: 2pt;
+  }
+  .letterhead .name {
+    font-size: 20pt;
+    line-height: 1.1;
+    margin: 0;
+    color: #0b3d5c;
+  }
+  .letterhead .role {
+    font-size: 9.5pt;
+    margin: 3pt 0 6pt;
+    color: #4a5568;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .letterhead .contacts {
+    font-size: 9pt;
+    margin: 0;
+    color: #4a5568;
+  }
+  .letterhead .contacts a { color: #4a5568; text-decoration: none; }
+  .letterhead .contacts .sep { color: #a8b2c1; padding: 0 5pt; }
+  /* Wrap between contacts, never inside one — otherwise a phone number splits. */
+  .letterhead .contacts .item { white-space: nowrap; }
+
+  .resume-body h2 {
+    font-size: 12pt;
+    margin: 10pt 0 3pt;
+    padding-bottom: 2pt;
+    border-bottom: 1.5px solid #0b3d5c;
+    color: #0b3d5c;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    page-break-after: avoid;
+  }
+  .resume-body h3 { font-size: 10.5pt; margin: 8pt 0 2pt; page-break-after: avoid; }
+
+  .resume-body p { margin: 3pt 0; }
+  .resume-body ul { margin: 3pt 0; padding-left: 15pt; }
+  /* Each entry is one bullet — keep it whole rather than split across pages. */
+  .resume-body li { margin: 0 0 3pt; page-break-inside: avoid; }
+  .resume-body a { color: #0b57d0; text-decoration: none; }
+  /* Inline emphasis stays plain bold: a résumé bolds enough keywords that
+     colouring them all turns the page into noise. */
+  .resume-body strong { color: #111; font-weight: 600; }
+  /* The accent goes on each bullet's lead-in instead, which is what the eye
+     scans down the left edge — and it matches project names on the CV. */
+  .resume-body li > strong:first-child { color: #0b3d5c; }
+  .resume-body code { font-family: inherit; font-size: inherit; font-weight: 600; color: #0b3d5c; }
+
+  /* The name is in the letterhead; an `# ...` heading in the file is a label. */
+  .resume-body h1 { display: none; }
+</style>
+</head>
+<body>
+  <header class="letterhead">
+    <p class="name">{{name}}</p>
+    <p class="role">{{role}}</p>
+    <p class="contacts">{{contacts}}</p>
+  </header>
+
+  <main class="resume-body">
+{{content}}
+  </main>
+</body>
+</html>

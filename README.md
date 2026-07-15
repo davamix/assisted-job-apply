@@ -36,7 +36,7 @@ config/search.json ─▶ linkedin/search.js ─▶ ingest_search.py ─▶ [ SQ
                                                      linkedin/job-detail.js (triage)
                                                                         │  (you decide fit)
                                                                         ▼
-                          common/md-to-pdf.js ◀─ cover letter / CV / résumé ─ [ prepared ]
+              templates/ ▶ common/md-to-pdf.js ◀─ cover letter / CV / résumé ─ [ prepared ]
                                                                         │
                                         linkedin/easyapply.js  ·OR·  bamboohr/apply.js (headed)
                                                         fills every step … then PAUSES
@@ -59,7 +59,8 @@ review page, writes `output/<jobId>/state.json`, and polls for a signal file you
 | `scripts/linkedin/job-detail.js` | Fetch one job's full detail for triage. |
 | `scripts/linkedin/easyapply.js` | Fill an Easy Apply form and pause for approval. |
 | `scripts/bamboohr/apply.js` | Fill a BambooHR external form and pause for you to submit. |
-| `scripts/common/md-to-pdf.js` | Render a Markdown CV/cover letter/résumé to PDF (via Chromium). |
+| `scripts/common/md-to-pdf.js` | Render a Markdown CV/résumé/letter to PDF (via Chromium + `templates/`). |
+| `templates/` | HTML + CSS for the rendered PDFs (`cv.html`, `resume.html`, `letter.html`) — all styling lives here, plus how and when to use each document. |
 | `scripts/common/classify-doc-field.js` | Classify an upload field as asking for a CV vs a Résumé. |
 | `scripts/README.md` | Script layout, capability matrix, and the per-site adapter contract. |
 | `db/jobs_db.py` | SQLite data layer + CLI. |
@@ -138,9 +139,15 @@ python db/jobs_db.py set-status --id <dbId> --status skipped --notes "below sala
 ```bash
 node scripts/common/md-to-pdf.js --in "output/<dbId>/Cover letter.md" --out "output/<dbId>/Cover letter.pdf"
 ```
+Write only the letter itself — the letterhead (name, contacts, date) is generated from
+`config/profile.json`, and the template is picked from the filename.
+
 If a form asks specifically for a **Résumé** (not a CV), write a shorter, role-tailored
-`output/<dbId>/resume.md` (condensed from your CV) and render it the same way to `resume.pdf`;
-point `answers.json` → `resume_upload` at that PDF. See [scripts/README.md](scripts/README.md).
+`output/<dbId>/resume.md` (condensed from your CV) and render it the same way to `resume.pdf`
+(add `--role "…"` to tailor its title line); point `answers.json` → `resume_upload` at that PDF.
+If it asks for a **presentation letter** instead of a cover letter, render the reusable
+`assets/presentation-letter.md`. See [templates/README.md](templates/README.md) for which document
+to use when, and [scripts/README.md](scripts/README.md) for the adapter contract.
 
 **5. Apply (human-gated):**
 ```bash

@@ -88,15 +88,38 @@ Some employers ask for a **Résumé** (shorter, US-style) rather than a full **C
 an apply adapter reads the file field's label and classifies it (`'cv' | 'resume' | 'unknown'`; CV
 wins when both are mentioned). For a **CV** it attaches the default or an adapted `output/<id>/CV.pdf`;
 for a **Résumé** it attaches `output/<id>/resume.pdf`, authored on demand (Markdown condensed from the
-CV, tailored to the role, rendered like a cover letter). If the form asks specifically for a Résumé
+CV, tailored to the role, rendered through `templates/resume.html`). If the form asks specifically for a Résumé
 and none exists yet, the adapter emits `needs-resume` and refuses to attach the CV to a résumé slot —
 you author the résumé, then re-run. `answers.json` carries `resume_upload` + `resume_doc_type`; the
 Markdown is durable (linked in the dashboard) and the PDF is transient.
 
-### PDF rendering (`common/md-to-pdf.js`)
-Markdown → HTML (`markdown-it`) → PDF using the Chromium that Playwright already ships
-(`page.pdf()`), with print CSS tuned for a clean, ATS-friendly one-column resume/letter. Renders CVs,
-cover letters, and on-demand résumés alike. No LaTeX, pandoc, or system PDF tooling required.
+### PDF rendering (`common/md-to-pdf.js` + `templates/`)
+Markdown → HTML (`markdown-it`) → an HTML template → PDF using the Chromium that Playwright already
+ships (`page.pdf()`). No LaTeX, pandoc, or system PDF tooling required.
+
+All presentation lives in `templates/` (see its README); the script holds none. The three templates —
+`cv.html`, `resume.html`, `letter.html` — open with the same letterhead (name, role, contacts,
+injected from `config/profile.json`), so a CV, its résumé and its cover letter arrive looking like one
+set. Below it they differ by how much space the document has: the CV is dense one-column print, the
+letter is block-format prose with roomy margins, the résumé sits between and targets one page. The
+template is chosen by filename ("cover"/"presentation" → letter, "resume"/"résumé" → resume, else cv)
+or `--template`, and each sets its own page size and margins via `@page` (`preferCSSPageSize`).
+
+Four document types share those three templates. A **presentation letter** (letter of introduction —
+who you are, what you bring, what you're looking for; reusable, names no posting) is a different
+document from a **cover letter** (argues your fit for one role), but only in its wording, so both
+render through `letter.html`. `presentation_letter_path` on the `jobs` row records it when a form
+asks for one; most ask for a cover letter instead.
+
+Markdown therefore contains only the authored document — a CV or résumé starts at its first
+`## Section`, a letter at the salutation. No name, no contact block, no footer: those are generated,
+so they cannot drift between documents. Two letterhead details are per-document: the résumé's line is
+led by location (remote gates the first screen), and its role is tailored per application via
+`--role` rather than the standing `current_title`.
+
+The letter renders with `breaks: true` so the signature block keeps its line breaks, which Markdown
+would otherwise collapse into a single line. All render with `fuzzyLink` off, because `.NET` is a TLD
+and schemeless autolinking otherwise turns every "ASP.NET" on a CV into a dead link.
 
 ### Datastore (`db/jobs_db.py`)
 Standard-library `sqlite3`. Single `jobs` table with an internal auto-increment `id` (also the

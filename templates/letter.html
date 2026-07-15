@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{{title}}</title>
+<style>
+  /* Roomier than the CV's margins: a letter is one page of prose, not a
+     density problem, and 22mm keeps the line length readable. */
+  @page { size: A4; margin: 20mm 22mm; }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: "Calibri", "Segoe UI", Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 11pt;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  /* Letterhead — name, title, contacts. Injected from config/profile.json,
+     styled to match cv.html so the CV and the letter read as one set. */
+  .letterhead {
+    border-bottom: 1.5px solid #0b3d5c;
+    padding-bottom: 9pt;
+    margin-bottom: 18pt;
+  }
+  .letterhead .name {
+    font-size: 20pt;
+    line-height: 1.1;
+    margin: 0;
+    color: #0b3d5c;
+  }
+  .letterhead .role {
+    font-size: 9.5pt;
+    margin: 4pt 0 9pt;
+    color: #4a5568;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .letterhead .contacts {
+    font-size: 9.5pt;
+    margin: 0;
+    color: #4a5568;
+  }
+  .letterhead .contacts a { color: #4a5568; text-decoration: none; }
+  .letterhead .contacts .sep { color: #a8b2c1; padding: 0 7pt; }
+  /* Wrap between contacts, never inside one — otherwise a phone number splits. */
+  .letterhead .contacts .item { white-space: nowrap; }
+
+  .date { margin: 0 0 18pt; font-size: 10pt; color: #4a5568; }
+
+  /* Body — block format: no first-line indent, a full blank line between
+     paragraphs. This is the spacing a CV deliberately gives up to fit one page. */
+  .letter-body p { margin: 0 0 11pt; }
+  .letter-body a { color: #0b57d0; text-decoration: none; }
+  .letter-body strong { color: #111; font-weight: 600; }
+  .letter-body ul { margin: 0 0 11pt; padding-left: 16pt; }
+  .letter-body li { margin: 0 0 3pt; }
+
+  /* An `# ...` heading in a letter file labels the document for the dashboard;
+     it is not part of the letter the employer reads. */
+  .letter-body h1 { display: none; }
+
+  /* Complimentary close + signature — always the last block in the file.
+     Targeted structurally so the Markdown stays free of layout markup. */
+  .letter-body > p:last-child { margin-top: 16pt; page-break-inside: avoid; }
+</style>
+</head>
+<body>
+  <header class="letterhead">
+    <p class="name">{{name}}</p>
+    <p class="role">{{role}}</p>
+    <p class="contacts">{{contacts}}</p>
+  </header>
+
+  <p class="date">{{date}}</p>
+
+  <main class="letter-body">
+{{content}}
+  </main>
+</body>
+</html>
