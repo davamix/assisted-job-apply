@@ -234,6 +234,32 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 - If the session expires, just re-run `linkedin/login.js`.
 - Run scripts from the project root; if you must run from elsewhere, set `NODE_PATH` to the project's `node_modules`.
 
+## Changelog
+
+Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
+is one, then one bullet per notable change — not one per commit.
+
+### 2026-07-15 — HTML templates for rendered documents ([#2](https://github.com/davamix/assisted-job-apply/pull/2))
+
+- **All PDF styling now lives in [`templates/`](templates/)** (`cv.html`, `resume.html`, `letter.html`); `md-to-pdf.js` holds none. Edit the CSS there and re-render — no code change.
+- **The letterhead is generated**, not authored: name, role, contacts and date come from `config/profile.json` at render time. Write documents *without* a name/contact header or you get it twice.
+- **Presentation letters** (letters of introduction) added as a document type — reusable, kept at `assets/presentation-letter.md`, rendered through `letter.html`.
+- Fixed: cover letters lost paragraph spacing and their signature line breaks in PDF; every `ASP.NET` / `VB.NET` on a CV rendered as a dead link (`.NET` is a real TLD); phone numbers split across lines.
+- Documents produced before this keep their own headers and are left alone as historical records.
+
+### 2026-07-14 — CV vs Résumé handling, per-site adapters ([#1](https://github.com/davamix/assisted-job-apply/pull/1))
+
+- Upload fields are classified as **CV vs Résumé**; a Résumé is authored on demand (condensed from your CV, tailored to the role) and the CV is never substituted into a Résumé slot.
+- `scripts/` reorganized into `common/` plus one folder per job portal; BambooHR apply adapter added.
+
+### 2026-07-13 — Local web dashboard
+
+- `web/app.py` serves a local dashboard over `data/jobs.db`: filter by status/market/country, move jobs through the status funnel, edit notes inline, and open each job's generated documents.
+
+### 2026-07-13 — Initial public release
+
+- LinkedIn job search, triage, and human-gated Easy Apply — the driver fills every step, screenshots the review page, and waits for your approval. Nothing is ever submitted on its own.
+
 ## License
 
 [MIT](LICENSE).
