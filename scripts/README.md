@@ -2,8 +2,8 @@
 
 Automation scripts, organized as **site-agnostic common utilities** plus **one folder per
 job portal**. The tool started LinkedIn-only and now supports external ATS portals
-(BambooHR, with Greenhouse/Lever/Workday likely to follow), so each portal is an *adapter*
-implementing only the capabilities it supports.
+(BambooHR and Teamtailor, with Greenhouse/Lever/Workday likely to follow), so each portal
+is an *adapter* implementing only the capabilities it supports.
 
 ## Layout
 
@@ -11,12 +11,16 @@ implementing only the capabilities it supports.
 scripts/
   common/                    # site-agnostic utilities
     md-to-pdf.js             # render Markdown (CV / résumé / letter) -> PDF via templates/
+    md-to-text.js            # flatten Markdown (letter) -> plain text for an ATS textarea
     classify-doc-field.js    # classify an upload field label -> 'cv' | 'resume' | 'unknown'
   linkedin/                  # LinkedIn Jobs adapter (full pipeline)
     login.js  verify.js  search.js  job-detail.js  easyapply.js
   bamboohr/                  # BambooHR external-apply adapter (apply only)
     apply.js
     probe-fields.js  probe-questions.js   # reconnaissance used to build a job's answers.json
+  teamtailor/                # Teamtailor external-apply adapter (apply only)
+    apply.js
+    probe-fields.js          # reconnaissance used to build a job's answers.json
 ```
 
 Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `config/`,
@@ -25,10 +29,11 @@ Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `con
 
 ## Capability matrix
 
-| Site      | session (login/verify) | search | job-detail (triage) | apply (fill + human gate) |
-|-----------|:----------------------:|:------:|:-------------------:|:-------------------------:|
-| linkedin  | ✓                      | ✓      | ✓                   | ✓                         |
-| bamboohr  | –                      | –      | –                   | ✓                         |
+| Site       | session (login/verify) | search | job-detail (triage) | apply (fill + human gate) |
+|------------|:----------------------:|:------:|:-------------------:|:-------------------------:|
+| linkedin   | ✓                      | ✓      | ✓                   | ✓                         |
+| bamboohr   | –                      | –      | –                   | ✓                         |
+| teamtailor | –                      | –      | –                   | ✓                         |
 
 External ATS sites are reached via the "Apply on company website" link found during
 LinkedIn triage, so they usually implement **apply only**.
@@ -90,3 +95,22 @@ A portal adapter should:
   (Address is left to the human); Country/State use hidden native `<select>`s that do
   accept it; there is a `g-recaptcha-response` the human solves and a `nickname_hpcsaf`
   honeypot that must be left blank.
+- **teamtailor** — a cookie wall covers the page and swallows the first click, so it must
+  be dismissed before anything else is reachable. APPLY opens an in-page Stimulus overlay
+  (`click->careersite--jobs--form-overlay#showFormOverlay`), not a `/applications/new` URL.
+  Fields are Rails-named (`candidate[first_name]`, `candidate[answers_attributes][N][…]`),
+  which brings two traps:
+  - **Consent** renders a hidden `value="0"` input *before* the real checkbox, sharing the
+    name `candidate[consent_given]` — match on `input[type=checkbox]`, or you check nothing.
+  - **Dropdown questions** (`forms--inputs--choice` with `show-as-dropdown-value="true"`)
+    keep their radios `sr-only` and *outside* the panel, so `label[for=…]` is never
+    clickable. Open the trigger and click the panel's `<button data-search-text="…">`, and
+    let the controller check the radio: forcing `checked` leaves the component's own
+    `required` validation input empty and the form rejects the submit with "You must select
+    an option". Plain (non-dropdown) choice groups are clicked by label as usual.
+
+  Screening questions are matched on **wording, not `answers_attributes` index** — those
+  indices are positional and shift when the posting is edited. The question wording is
+  anchored on the group's hidden input, which sits higher in the DOM than the choice
+  inputs; walking up from a choice input yields only the choice labels. Every choice click
+  is confirmed with `isChecked()` before being reported as filled.
