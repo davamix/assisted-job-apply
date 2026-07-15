@@ -18,6 +18,7 @@ everything.
 
 - [What it does](#what-it-does) — the pitch, and what it deliberately won't do
 - [How it works](#how-it-works) — the pipeline, end to end
+- [Adapters](#adapters) — the job portals it can drive
 - [Repository layout](#repository-layout) — what every file is
 - [Prerequisites](#prerequisites)
 - [Setup](#setup) — install, your profile, your CV, your searches, the database
@@ -44,8 +45,9 @@ everything.
 - ✅ **Apply** through the multi-step Easy Apply form — filling contact info, screening questions,
   compliance attestations, selecting the right resume, uploading a cover letter — then **stopping at
   the review page for your approval**.
-- 🏢 **External ATS portals** (BambooHR today) have their own *apply adapters* that fill the company
-  form and pause for you to solve the reCAPTCHA and submit — same never-auto-submit rule.
+- 🏢 **External ATS portals** (BambooHR, Teamtailor and Workday today) have their own *apply
+  adapters* that fill the company form and pause for you to review and submit — same
+  never-auto-submit rule. See [Adapters](#adapters).
 
 ## How it works
 
@@ -57,7 +59,7 @@ config/search.json ─▶ linkedin/search.js ─▶ ingest_search.py ─▶ [ SQ
                                                                         ▼
               templates/ ▶ common/md-to-pdf.js ◀─ cover letter / CV / résumé ─ [ prepared ]
                                                                         │
-                                        linkedin/easyapply.js  ·OR·  bamboohr/apply.js (headed)
+                              linkedin/easyapply.js  ·OR·  <site>/apply.js (headed)
                                                         fills every step … then PAUSES
                                                                         │
                                           you review screenshot ▶ create APPROVE / ABORT / CLOSE
@@ -67,6 +69,36 @@ config/search.json ─▶ linkedin/search.js ─▶ ingest_search.py ─▶ [ SQ
 
 The apply driver **never clicks the final Submit on its own**. It fills the form, screenshots the
 review page, writes `output/<jobId>/state.json`, and polls for a signal file you create.
+
+## Adapters
+
+Scripts are organized as per-site **adapters** (`scripts/<site>/`) over shared `scripts/common/`
+utilities. LinkedIn drives the whole pipeline; external ATS portals are reached through the
+"Apply on company website" link found during triage, so they implement **apply only**. Every
+adapter obeys the same contract: fill from `answers.json`, never invent data, verify each field,
+screenshot, and **stop before submit**.
+
+| Portal | Capabilities | Run it |
+|---|---|---|
+| **LinkedIn** | session · search · triage · apply | `npm run login` · `search` · `detail` · `apply` |
+| **BambooHR** | apply | `npm run apply:bamboohr -- --url <careers-url> --id <dbId>` |
+| **Teamtailor** | apply | `npm run apply:teamtailor -- --url <careers-url> --id <dbId>` |
+| **Workday** | session (per tenant) · apply | `npm run login:workday -- --tenant <tenant-url>`, then `npm run apply:workday -- --url <job-url> --id <dbId>` |
+
+Worth knowing before you use one:
+
+- **Workday needs an account**, unlike the others, and it is **per tenant** — an account with one
+  employer does not work for another, so each gets its own `.auth/workday-<tenant>-state.json`.
+  It also keeps your résumé on the *candidate profile* rather than the application, so re-running
+  appends duplicates; the adapter skips re-uploading a file it already finds attached.
+- **BambooHR** leaves Address/ZIP to you and has a reCAPTCHA you solve before submitting.
+- **Teamtailor** hides a cookie wall in front of the form and opens the application as an in-page
+  overlay; its dropdowns reject a forced value and will block the submit if faked.
+- Each portal ships a `probe-fields.js` — read-only reconnaissance that enumerates a form and its
+  screening questions so a job's `answers.json` can be written against what the page really is.
+
+[scripts/README.md](scripts/README.md) has the capability matrix, the adapter contract, and the
+full per-site quirk list — read it before adding a portal.
 
 ## Repository layout
 
@@ -78,7 +110,12 @@ review page, writes `output/<jobId>/state.json`, and polls for a signal file you
 | `scripts/linkedin/job-detail.js` | Fetch one job's full detail for triage. |
 | `scripts/linkedin/easyapply.js` | Fill an Easy Apply form and pause for approval. |
 | `scripts/bamboohr/apply.js` | Fill a BambooHR external form and pause for you to submit. |
+| `scripts/teamtailor/apply.js` | Fill a Teamtailor external form and pause for you to submit. |
+| `scripts/workday/login.js` · `verify.js` | Per-tenant Workday candidate session → `.auth/`. |
+| `scripts/workday/apply.js` | Walk Workday's 5-step wizard and stop at Review. |
+| `scripts/<site>/probe-fields.js` | Read-only recon of a form, to build its `answers.json`. |
 | `scripts/common/md-to-pdf.js` | Render a Markdown CV/résumé/letter to PDF (via Chromium + `templates/`). |
+| `scripts/common/md-to-text.js` | Flatten a Markdown letter to prose for a cover-letter textarea. |
 | `templates/` | HTML + CSS for the rendered PDFs (`cv.html`, `resume.html`, `letter.html`) — all styling lives here, plus how and when to use each document. |
 | `scripts/common/classify-doc-field.js` | Classify an upload field as asking for a CV vs a Résumé. |
 | `scripts/README.md` | Script layout, capability matrix, and the per-site adapter contract. |
@@ -235,8 +272,9 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 - **Form field matching** lives in `scripts/linkedin/easyapply.js` as a `RULES` array (label
   regex → answer key). Add rules for questions specific to your field.
 - **Adding a job board** — scripts are organized as per-site *adapters* (`scripts/<site>/`) over
-  shared `scripts/common/` utilities. See [scripts/README.md](scripts/README.md) for the layout,
-  capability matrix, and adapter contract; `scripts/bamboohr/` is a worked example (apply only).
+  shared `scripts/common/` utilities. See [Adapters](#adapters) for what exists today and
+  [scripts/README.md](scripts/README.md) for the layout, capability matrix, and adapter contract;
+  `scripts/teamtailor/` is a compact worked example (probe + apply, no session).
 - **Compliance defaults** (all conflict questions → "No", accept policy, "found via LinkedIn",
   never auto-follow the company) are applied automatically and shown on the review screen before you approve.
 - **Headed vs. headless**: search/detail default to headless; the apply driver is headed so you can watch.
@@ -246,17 +284,31 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 - LinkedIn's logged-in DOM is **heavily obfuscated** (hashed class names). The scripts rely on
   accessible labels/roles and stable text anchors, but LinkedIn changes its UI often — if a
   selector breaks, the diagnostic pattern in `docs/ARCHITECTURE.md` shows how to inspect and fix it.
-- **External application sites** — most (Workday, Greenhouse, etc.) are logged for you to complete
-  manually, but supported portals have an *apply adapter* under `scripts/<site>/` (BambooHR today:
-  `node scripts/bamboohr/apply.js --url <careers-url> --id <dbId> --answers output/<dbId>/answers.json`).
-  Adapters fill the form and pause — you solve the reCAPTCHA and submit (never auto-submitted).
-- If the session expires, just re-run `linkedin/login.js`.
+- **External application sites** — [supported portals](#adapters) have an *apply adapter* under
+  `scripts/<site>/` (BambooHR, Teamtailor, Workday). Anything else (Greenhouse, Lever, …) is logged
+  for you to complete manually. Adapters fill the form and pause — you review and submit (never
+  auto-submitted).
+- If the LinkedIn session expires, re-run `linkedin/login.js`; for Workday, re-run
+  `workday/login.js --tenant <tenant-url>` (`workday/verify.js` tells you whether it is still good).
 - Run scripts from the project root; if you must run from elsewhere, set `NODE_PATH` to the project's `node_modules`.
 
 ## Changelog
 
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
+
+### 2026-07-15 — Workday adapter ([#4](https://github.com/davamix/assisted-job-apply/pull/4))
+
+- **Workday supported** — `scripts/workday/`: `login.js` / `verify.js` for a **per-tenant** candidate session, `apply.js` to walk the 5-step wizard and stop at Review, `probe-fields.js` for recon. First portal needing an account.
+- Workday keeps your **résumé on the candidate profile**, not the application, and the widget appends — re-running stacked duplicate CVs. The adapter now skips uploading a file it already finds attached.
+- `login.js` and `verify.js` share one signed-in probe requiring **positive evidence**: an earlier version read "no Sign In button" as success and saved an anonymous session.
+
+### 2026-07-15 — Teamtailor adapter ([#3](https://github.com/davamix/assisted-job-apply/pull/3))
+
+- **Teamtailor supported** — `scripts/teamtailor/apply.js` + `probe-fields.js`. Handles the cookie wall, the in-page Stimulus form overlay, and Rails-named fields.
+- Screening questions are matched on **question wording, not field index**, so a re-ordered posting fails loudly instead of filing the right answer under the wrong question.
+- Every choice is confirmed with `isChecked()` before being reported as filled — two bugs shipped as *false successes* (an unticked consent box, an unset location) that would have blocked the submit.
+- `common/md-to-text.js` added: letters are authored in Markdown, but a cover-letter textarea takes prose.
 
 ### 2026-07-15 — HTML templates for rendered documents ([#2](https://github.com/davamix/assisted-job-apply/pull/2))
 
