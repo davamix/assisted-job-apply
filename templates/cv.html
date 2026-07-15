@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{{title}}</title>
+<style>
+  /* Tighter than the letter's margins: a CV is a density problem. */
+  @page { size: A4; margin: 14mm 15mm; }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: "Calibri", "Segoe UI", Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 10.5pt;
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  /* Letterhead — identical to letter.html so the CV and the cover letter
+     arrive looking like one set. Injected from config/profile.json. */
+  .letterhead {
+    border-bottom: 1.5px solid #0b3d5c;
+    padding-bottom: 8pt;
+    margin-bottom: 4pt;
+  }
+  .letterhead .name {
+    font-size: 20pt;
+    line-height: 1.1;
+    margin: 0;
+    color: #0b3d5c;
+  }
+  .letterhead .role {
+    font-size: 9.5pt;
+    margin: 4pt 0 8pt;
+    color: #4a5568;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .letterhead .contacts {
+    font-size: 9pt;
+    margin: 0;
+    color: #4a5568;
+  }
+  .letterhead .contacts a { color: #4a5568; text-decoration: none; }
+  .letterhead .contacts .sep { color: #a8b2c1; padding: 0 5pt; }
+  /* Wrap between contacts, never inside one — otherwise a phone number splits. */
+  .letterhead .contacts .item { white-space: nowrap; }
+
+  /* Section headings. page-break-after:avoid stops a heading strandeding
+     itself at the foot of a page with its section overleaf. */
+  .cv-body h2 {
+    font-size: 12.5pt;
+    margin: 14pt 0 4pt;
+    padding-bottom: 2pt;
+    border-bottom: 1.5px solid #0b3d5c;
+    color: #0b3d5c;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    page-break-after: avoid;
+  }
+  .cv-body h3 { font-size: 11pt; margin: 9pt 0 2pt; page-break-after: avoid; }
+
+  .cv-body p { margin: 3pt 0; }
+  .cv-body ul { margin: 3pt 0; padding-left: 16pt; }
+  /* Each role/project is one bullet — keep it whole rather than split across pages. */
+  .cv-body li { margin: 1.5pt 0; page-break-inside: avoid; }
+  .cv-body a { color: #0b57d0; text-decoration: none; }
+  .cv-body strong { color: #111; }
+  .cv-body hr { border: none; border-top: 1px solid #ccc; margin: 8pt 0; }
+  /* Backticks in this CV mark project names, not code — a monospace chip reads
+     as a snippet. Render them as accent-coloured labels instead. */
+  .cv-body code { font-family: inherit; font-size: inherit; font-weight: 600; color: #0b3d5c; }
+
+  /* The name is in the letterhead; an `# ...` heading in the file is a label. */
+  .cv-body h1 { display: none; }
+</style>
+</head>
+<body>
+  <header class="letterhead">
+    <p class="name">{{name}}</p>
+    <p class="role">{{role}}</p>
+    <p class="contacts">{{contacts}}</p>
+  </header>
+
+  <main class="cv-body">
+{{content}}
+  </main>
+</body>
+</html>

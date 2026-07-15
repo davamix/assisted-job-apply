@@ -10,7 +10,7 @@ implementing only the capabilities it supports.
 ```
 scripts/
   common/                    # site-agnostic utilities
-    md-to-pdf.js             # render Markdown (CV / cover letter / résumé) -> PDF
+    md-to-pdf.js             # render Markdown (CV / résumé / letter) -> PDF via templates/
     classify-doc-field.js    # classify an upload field label -> 'cv' | 'resume' | 'unknown'
   linkedin/                  # LinkedIn Jobs adapter (full pipeline)
     login.js  verify.js  search.js  job-detail.js  easyapply.js
@@ -60,10 +60,10 @@ apply adapter reads the upload field's label and classifies it via
   (`assets/…-ATS.pdf`) or, if adaptation is warranted, an adapted `output/<id>/CV.md` →
   `CV.pdf`.
 - **Résumé** (asked for specifically) → author `output/<id>/resume.md` **condensed from the
-  CV markdown** and tailored to the role (like a cover letter), render it with
-  `common/md-to-pdf.js` to `resume.pdf`, and attach that. The Markdown is the durable
-  artifact (surfaced in the dashboard); the PDF is transient and may be discarded after
-  upload.
+  CV markdown** and tailored to the role, render it with `common/md-to-pdf.js` to
+  `resume.pdf` (it picks `templates/resume.html` from the filename; pass `--role` to tailor
+  the title line), and attach that. The Markdown is the durable artifact (surfaced in the
+  dashboard); the PDF is transient and may be discarded after upload.
 
 If the form asks for a Résumé but none has been authored yet, the adapter emits
 `needs-resume` and does **not** attach the CV to the résumé slot — author the résumé, then

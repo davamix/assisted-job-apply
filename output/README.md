@@ -9,11 +9,16 @@ internal database id: `output/<jobId>/`. Everything here is **personal** and git
 | File | Created by | Meaning |
 |------|-----------|---------|
 | `answers.json` | you / the pipeline | The form answers for this job (see keys below). This is the input the apply driver reads. |
-| `Cover letter.md` | pipeline | Draft cover letter for this job (Markdown). |
+| `Cover letter.md` | pipeline | Draft cover letter for this job (Markdown), arguing your fit for **this** posting. |
 | `Cover letter.pdf` | `scripts/common/md-to-pdf.js` | PDF of the cover letter, uploaded when a form has a cover-letter slot. |
+| `Presentation letter.pdf` | `scripts/common/md-to-pdf.js` | Rendered from the reusable `assets/presentation-letter.md`, for the rare form that asks for a letter of introduction instead of a cover letter. No per-job `.md`: it names no company. |
 | `CV.md` / `CV.pdf` | pipeline (optional) | A tailored CV for this job, only when adaptation is warranted (`.md` rendered to `.pdf`). |
 | `resume.md` | pipeline (on demand) | A **Résumé** (shorter, US-style) authored when a form asks for one specifically — condensed from your CV, tailored to the role. Durable artifact; linked in the dashboard. |
 | `resume.pdf` | `scripts/common/md-to-pdf.js` | Rendered Résumé, uploaded to the form. **Transient** — may be discarded after upload (the `.md` is what's kept). |
+
+Documents are authored **without a name/contact header** — `md-to-pdf.js` generates the letterhead
+from `config/profile.json`. See `templates/README.md` for which template renders what, and how.
+Documents produced before that change keep their own headers and are left as historical records.
 | `state.json` | `scripts/linkedin/easyapply.js` | Live run status (`ready_for_approval` / `needs_input` / `applied` / …) plus the log of every field it filled. |
 | `step-*.png`, `review.png`, `confirmation.png` | apply driver | Screenshots of each Easy Apply step, the final review, and the submitted confirmation. |
 | `APPROVE` / `ABORT` | **you** | Signal files. The LinkedIn apply driver pauses at the review and waits: create `APPROVE` to submit, `ABORT` to discard. |
