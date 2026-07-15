@@ -14,6 +14,25 @@ everything.
 
 ---
 
+## Contents
+
+- [What it does](#what-it-does) — the pitch, and what it deliberately won't do
+- [How it works](#how-it-works) — the pipeline, end to end
+- [Repository layout](#repository-layout) — what every file is
+- [Prerequisites](#prerequisites)
+- [Setup](#setup) — install, your profile, your CV, your searches, the database
+- [Usage](#usage) — login → search → triage → prepare → apply
+  - [The approval protocol](#the-approval-protocol) — how the driver pauses for you
+- [Dashboard (web UI)](#dashboard-web-ui) — local view over your applications
+- [Configuration](#configuration) — `config/profile.json` and `config/search.json`
+- [Database](#database) — the SQLite record and its CLI
+- [Customization](#customization) — tuning it to your own search
+- [Limitations & troubleshooting](#limitations--troubleshooting)
+- [Changelog](#changelog)
+- [License](#license)
+
+---
+
 ## What it does
 
 - 🔐 **Log in once** in a real browser; the session is reused so your password is never stored or scripted.
