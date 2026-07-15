@@ -18,6 +18,7 @@
     "detail": "node scripts/linkedin/job-detail.js",
     "apply": "node scripts/linkedin/easyapply.js",
     "apply:bamboohr": "node scripts/bamboohr/apply.js",
+    "apply:teamtailor": "node scripts/teamtailor/apply.js",
     "pdf": "node scripts/common/md-to-pdf.js"
   },
   "devDependencies": {
