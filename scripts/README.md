@@ -2,7 +2,7 @@
 
 Automation scripts, organized as **site-agnostic common utilities** plus **one folder per
 job portal**. The tool started LinkedIn-only and now supports external ATS portals
-(BambooHR and Teamtailor, with Greenhouse/Lever/Workday likely to follow), so each portal
+(BambooHR, Teamtailor and Workday, with Greenhouse/Lever likely to follow), so each portal
 is an *adapter* implementing only the capabilities it supports.
 
 ## Layout
@@ -21,6 +21,11 @@ scripts/
   teamtailor/                # Teamtailor external-apply adapter (apply only)
     apply.js
     probe-fields.js          # reconnaissance used to build a job's answers.json
+  workday/                   # Workday external-apply adapter (session + apply)
+    login.js  verify.js      # per-tenant candidate session -> .auth/workday-<tenant>-state.json
+    session.js               # shared "is this session signed in?" probe
+    apply.js                 # walks the 5-step wizard, stops at Review
+    probe-fields.js          # reconnaissance used to build a job's answers.json
 ```
 
 Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `config/`,
@@ -34,6 +39,7 @@ Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `con
 | linkedin   | ✓                      | ✓      | ✓                   | ✓                         |
 | bamboohr   | –                      | –      | –                   | ✓                         |
 | teamtailor | –                      | –      | –                   | ✓                         |
+| workday    | ✓ (per tenant)         | –      | –                   | ✓                         |
 
 External ATS sites are reached via the "Apply on company website" link found during
 LinkedIn triage, so they usually implement **apply only**.
@@ -114,3 +120,35 @@ A portal adapter should:
   anchored on the group's hidden input, which sits higher in the DOM than the choice
   inputs; walking up from a choice input yields only the choice labels. Every choice click
   is confirmed with `isChecked()` before being reported as filled.
+
+- **workday** — the only portal so far needing an **account**: sign in once with
+  `workday/login.js` (per tenant — a Workday account with one employer does not work for
+  another) and the session lands in `.auth/workday-<tenant>-state.json`. Everything else is
+  a trap for the unwary:
+  - **Nothing persists as a draft.** Candidate Home stays empty until submit, so the whole
+    5-step wizard must be filled in ONE run; the url never changes between steps either,
+    so there is no navigation to wait on.
+  - **But the resume DOES persist** — on the candidate *profile*, not the application, and
+    the widget appends rather than replaces. Re-running once stacked five identical CVs.
+    `apply.js` now checks for the file by name and skips the upload if it is already there.
+  - **Tenant-specific paths**: IQVIA's signed-in landing page is `/userHome`, not
+    `/candidate_home` (which errors). The SPA answers HTTP 200 for missing pages and fails
+    client-side, so `curl` cannot tell them apart — only a browser can.
+  - **Two different dropdowns.** A plain one is `button[aria-haspopup="listbox"]` with
+    `<li role="option">` choices; the multiselect uses `[data-automation-id="promptOption"]`.
+    Selected pills reuse the `promptOption` id, so options must exclude anything inside
+    `selectedItemList`.
+  - **"How Did You Hear About Us" is hierarchical and virtualised** — typing does not filter
+    into children, so the taxonomy path is walked level by level, scrolling to load more
+    ("Job Boards/Websites" → "Job Boards/Websites - LinkedIn - Job Posting").
+  - **Skills is search-driven and needs Enter** — typing alone never runs the lookup and the
+    list reads "No Items." forever. The search is server-side and slow, so an empty list
+    means "still searching", not "no match".
+  - Steps render progressively, so wait for the field set to hold *still*, not merely to
+    differ, or you probe a half-built page.
+  - Application Questions are GUID-named with "Select One" as their only label: match on the
+    wrapper's question wording and select options by substring (they carry en-dashes and
+    curly quotes).
+
+  Every value is read back from the DOM before being reported as filled — on a form this
+  indirect, a click that lands on nothing looks identical to one that works.
