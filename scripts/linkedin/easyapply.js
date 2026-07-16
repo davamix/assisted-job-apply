@@ -15,6 +15,7 @@
 const { chromium } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
+const { classifyDocField } = require('../common/classify-doc-field.js');
 
 function parseArgs(argv) {
   const a = { headless: false, timeoutMs: '900000' };
@@ -51,6 +52,11 @@ const RULES = [
   // radio answer. Must precede the numeric rule below. Handled specially in resolveAnswer:
   // answers Yes when the asked threshold is within the candidate's .NET years, else pauses.
   { re: /(tienes|cuentas con|posees|dispones de|do you have|have you|al menos|at least|m[aá]s de|more than|minimum|m[ií]nimo|\+\s*\d|\d\s*\+).*(experiencia|experience|años|years).*(c#|\.net|dotnet)/i, key: '__dotnet_exp', choice: true },
+  // "Years of experience WITH <specific technology>" (e.g. "años ... con Microsoft Azure").
+  // Handled specially: answer only from an honest years_by_tech map or core C#/.NET-AI, else
+  // leave blank — a tool younger than the candidate's career is not 20 years old. Must precede
+  // the generic years rules so it intercepts the "con/with <tech>" phrasing.
+  { re: /(a[ñn]os|years)\b[^?.]{0,60}?\b(con|with|en|using|usando)\b\s+[a-z0-9.#]/i, key: '__years_tech' },
   { re: /(years|años).*(c#|\.net|dotnet)/i, key: 'years_dotnet' },
   { re: /python/i, key: 'years_python' },
   { re: /pytorch|tensorflow|keras|scikit/i, key: 'years_pytorch' },
@@ -58,6 +64,7 @@ const RULES = [
   // Whole-word AI/ML/LLM only — avoids matching the "ia" inside Spanish "experiencia".
   { re: /(years|años).*(\bai\b|\bia\b|machine learning|\bml\b|\bllm\b|genai|generative|\brag\b|deep learning)/i, key: 'years_ai' },
   { re: /how many years|cu[aá]ntos años|years of experience|años de experiencia/i, key: 'years_total' },
+  { re: /teletrabaj|trabajar? en remoto|trabajo (en )?remoto|work remotely|remotely\?|remote work|work from home|comfortable working remotely/i, key: 'remote_work', choice: true },
   { re: /authoriz|eligible to work|legally|right to work|work permit|work permission|permit to work|autorizad|permiso de trabajo|permiso para trabajar|puedes trabajar|derecho a trabajar/i, key: 'authorized', choice: true },
   { re: /sponsor|visa|patrocin/i, key: 'sponsorship', choice: true },
   { re: /salary|compensation|expected pay|pretensiones|salarial|remuneraci/i, key: 'salary_target' },
@@ -76,6 +83,21 @@ function resolveAnswer(label, ans) {
         return { value: ans.authorized_spain || 'Yes', choice: true };
       }
       if (r.key === 'sponsorship') return { value: ans.sponsorship || 'No', choice: true };
+      if (r.key === 'remote_work') return { value: ans.remote_ok || 'Yes', choice: true };
+      if (r.key === '__years_tech') {
+        // Years of experience with a SPECIFIC technology. Answer only from an honest,
+        // user-provided years_by_tech map; else fall back to the core C#/.NET or AI numbers we
+        // actually hold; otherwise LEAVE BLANK (return null) so the human fills an honest value
+        // — never overstate (e.g. ".NET Core" is younger than a 20-year career).
+        const map = {};
+        for (const [k, val] of Object.entries(ans.years_by_tech || {})) map[String(k).toLowerCase()] = val;
+        let bestK = null;
+        for (const k of Object.keys(map)) if (k && L.includes(k) && (!bestK || k.length > bestK.length)) bestK = k;
+        if (bestK) return { value: String(map[bestK]), choice: false };
+        if (/(c#|\.net|dotnet)/i.test(L) && !/core/i.test(L) && ans.years_dotnet) return { value: String(ans.years_dotnet), choice: false };
+        if (/(\bai\b|\bia\b|machine learning|\bml\b|\bllm\b|genai|generative|\brag\b|deep learning)/i.test(L) && ans.years_ai) return { value: String(ans.years_ai), choice: false };
+        return null;
+      }
       if (r.key === '__dotnet_exp') {
         // Parse the asked threshold (e.g. "+5", "at least 3", "más de 5 años"); answer Yes
         // only if it's within the candidate's .NET years, otherwise pause for a human.
@@ -197,6 +219,7 @@ function enumerateInPage() {
   let blocked = false;
   let unfilled = [];
   let coverUploaded = false;
+  let resumeUploaded = false;
   const MAX_STEPS = 10;
   for (let step = 0; step < MAX_STEPS; step++) {
     const info = await page.evaluate(enumerateInPage);
@@ -282,9 +305,69 @@ function enumerateInPage() {
       }
     }
 
-    // Ensure the intended CV is the selected resume. LinkedIn auto-selects the most
-    // recently uploaded file, which may be a cover letter used on a prior application.
-    if (ans.cv_filename_hint) {
+    // Document upload — Résumé vs CV. LinkedIn's attach button is hard-coded to the English
+    // "Upload resume" regardless of the posting's language, so it is NOT a reliable signal of
+    // what the employer wants: a Spanish form asks for a "Currículum*" (a CV) through that same
+    // English button. The authoritative signal is the required-field *label* — the text marked
+    // mandatory with '*'. We read that label (preferring the '*'-marked one), classify it, and
+    // only fall back to the button's own text if no labelled field names a document. So
+    // "Currículum" / "CV" → attach the default CV; only a genuine "Resume/Résumé" forces a
+    // résumé. See scripts/common/classify-doc-field.js and the CV-vs-Résumé flow.
+    let docKind = 'unknown', wantResume = false;
+    if (!resumeUploaded) {
+      const doc = await page.evaluate(() => {
+        const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
+        const root = document.querySelector('[data-ez-root]') || document.querySelector('form') || document.body;
+        const DOC_WORD = /(curr[ií]cul(?:um|o)(?:\s+vitae)?|curriculum\s+vitae|\bcv\b|\br[eé]sum[eé])/i;
+        // Is there a document upload control on this step at all (any language)?
+        const upCtl = [...root.querySelectorAll('button, label')].find((b) => {
+          const t = norm(b.getAttribute('aria-label') || b.textContent);
+          return /(upload|attach|select|subir|adjuntar|cargar)/i.test(t) &&
+                 (DOC_WORD.test(t) || /\b(document|file|archivo|fichero)\b/i.test(t));
+        });
+        // The employer's real ask: a short text element naming a document. The one marked
+        // required with '*' is the field the form is actually asking for, so it wins over the
+        // fixed English button text.
+        const labelled = [...root.querySelectorAll('p, label, legend, span, h2, h3, h4, [role="heading"]')]
+          .map((el) => norm(el.textContent))
+          .filter((t) => t && t.length < 60 && DOC_WORD.test(t));
+        let label = labelled.find((t) => /\*/.test(t)) || labelled[0] ||
+                    (upCtl ? norm(upCtl.getAttribute('aria-label') || upCtl.textContent) : '');
+        label = label.replace(/\s*\*+\s*$/, '').trim();   // strip the required marker
+        return { present: !!upCtl || !!label, label, hasUpload: !!upCtl };
+      });
+      if (doc.present) {
+        docKind = classifyDocField(doc.label);
+        emit('doc_field', { step, label: doc.label, kind: docKind });
+        // Attach a résumé ONLY when the field's own label is classified as a résumé. A CV /
+        // Currículum ask — or an ambiguous label we couldn't classify — defaults to the CV,
+        // the safe, complete document.
+        wantResume = docKind === 'resume';
+        if (wantResume && ans.resume_upload && doc.hasUpload) {
+          const upBtn = page.getByRole('button', {
+            name: /upload (resume|cv|your resume|curriculum)|subir (cv|curr[ií]culum)|adjuntar (cv|curr[ií]culum|resume)/i,
+          }).first();
+          try {
+            const [chooser] = await Promise.all([
+              page.waitForEvent('filechooser', { timeout: 5000 }),
+              upBtn.click(),
+            ]);
+            await chooser.setFiles(path.resolve(ans.resume_upload));
+            await page.waitForTimeout(2000);
+            resumeUploaded = true;
+            filledLog.push({ label: 'Résumé (uploaded)', value: path.basename(ans.resume_upload) });
+          } catch {}
+        } else if (wantResume && !ans.resume_upload) {
+          // A résumé is required but none is prepared — hand to the human, don't attach the CV.
+          emit('needs_resume', { step, label: doc.label });
+        }
+      }
+    }
+
+    // Ensure the intended CV is the selected document when the field is a CV ask (or we
+    // did not upload a résumé). LinkedIn auto-selects the most recently uploaded file,
+    // which may be a doc left over from a prior application.
+    if (ans.cv_filename_hint && !resumeUploaded && !wantResume) {
       try {
         const needSelect = await page.evaluate((hint) => {
           const re = new RegExp(hint, 'i');

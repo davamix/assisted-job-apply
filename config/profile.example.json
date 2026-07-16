@@ -36,6 +36,16 @@
   "willing_to_relocate": false,
   "remote_must_be_workable_from": "Your Country",
 
+  "travel": {
+    "available": false,
+    "note": "Set to false if you cannot travel. When false, triage rejects any role that mentions travel or on-site presence at all — required OR merely 'nice-to-have / valorable' — plus hybrid and periodic office visits. Never claims travel availability on your behalf in a letter or answer."
+  },
+
+  "contract_type": {
+    "wanted": ["permanent"],
+    "note": "Engagement type(s) you want, e.g. 'permanent' (employee / indefinite contract). Triage rejects the types you did not list — freelance / B2B / contractor / temporary. A 'rate per hour / B2B' salary question or a LinkedIn 'Contract' tag is the tell."
+  },
+
   "salary": {
     "currency": "EUR",
     "minimum": 0,
@@ -72,5 +82,12 @@
     "conflict_details_when_no": "N/A",
     "accept_privacy_policy": "Yes",
     "how_did_you_find_out": "LinkedIn"
+  },
+
+  "years_by_tech": {
+    "_note": "Optional. Honest years of experience for SPECIFIC technologies, used to answer 'how many years with <tech>?' screening questions. Keys are matched case-insensitively as substrings of the question. A technology NOT listed here is LEFT BLANK for you to fill rather than guessed, so a tool younger than your career is never overstated. Add your own keys; the ones below are examples.",
+    "azure": "0",
+    ".net core": "0",
+    "docker": "0"
   }
 }
