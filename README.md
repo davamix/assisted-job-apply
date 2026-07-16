@@ -45,7 +45,7 @@ everything.
 - ✅ **Apply** through the multi-step Easy Apply form — filling contact info, screening questions,
   compliance attestations, selecting the right resume, uploading a cover letter — then **stopping at
   the review page for your approval**.
-- 🏢 **External ATS portals** (BambooHR, Teamtailor and Workday today) have their own *apply
+- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo and Workday today) have their own *apply
   adapters* that fill the company form and pause for you to review and submit — same
   never-auto-submit rule. See [Adapters](#adapters).
 
@@ -83,6 +83,7 @@ screenshot, and **stop before submit**.
 | **LinkedIn** | session · search · triage · apply | `npm run login` · `search` · `detail` · `apply` |
 | **BambooHR** | apply | `npm run apply:bamboohr -- --url <careers-url> --id <dbId>` |
 | **Teamtailor** | apply | `npm run apply:teamtailor -- --url <careers-url> --id <dbId>` |
+| **Bizneo** | apply | `npm run apply:bizneo -- --url <careers-url> --id <dbId>` |
 | **Workday** | session (per tenant) · apply | `npm run login:workday -- --tenant <tenant-url>`, then `npm run apply:workday -- --url <job-url> --id <dbId>` |
 
 Worth knowing before you use one:
@@ -94,7 +95,11 @@ Worth knowing before you use one:
 - **BambooHR** leaves Address/ZIP to you and has a reCAPTCHA you solve before submitting.
 - **Teamtailor** hides a cookie wall in front of the form and opens the application as an in-page
   overlay; its dropdowns reject a forced value and will block the submit if faked.
-- Each portal ships a `probe-fields.js` — read-only reconnaissance that enumerates a form and its
+- **Bizneo** is a public form (no login). Its Country/City are select2 widgets — City is a *remote
+  autocomplete*, and setting the native value never fires the country→city cascade — and the dates
+  use a JS datepicker, so the adapter drives all three through their real UI, not raw values. It
+  also supports `--dryRun` (headless, no human gate) to validate a fill end to end.
+- Most portals ship a `probe-fields.js` — read-only reconnaissance that enumerates a form and its
   screening questions so a job's `answers.json` can be written against what the page really is.
 
 [scripts/README.md](scripts/README.md) has the capability matrix, the adapter contract, and the
@@ -111,6 +116,7 @@ full per-site quirk list — read it before adding a portal.
 | `scripts/linkedin/easyapply.js` | Fill an Easy Apply form and pause for approval. |
 | `scripts/bamboohr/apply.js` | Fill a BambooHR external form and pause for you to submit. |
 | `scripts/teamtailor/apply.js` | Fill a Teamtailor external form and pause for you to submit. |
+| `scripts/bizneo/apply.js` | Fill a Bizneo external form and pause for you to submit. |
 | `scripts/workday/login.js` · `verify.js` | Per-tenant Workday candidate session → `.auth/`. |
 | `scripts/workday/apply.js` | Walk Workday's 5-step wizard and stop at Review. |
 | `scripts/<site>/probe-fields.js` | Read-only recon of a form, to build its `answers.json`. |
@@ -285,7 +291,7 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
   accessible labels/roles and stable text anchors, but LinkedIn changes its UI often — if a
   selector breaks, the diagnostic pattern in `docs/ARCHITECTURE.md` shows how to inspect and fix it.
 - **External application sites** — [supported portals](#adapters) have an *apply adapter* under
-  `scripts/<site>/` (BambooHR, Teamtailor, Workday). Anything else (Greenhouse, Lever, …) is logged
+  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workday). Anything else (Greenhouse, Lever, …) is logged
   for you to complete manually. Adapters fill the form and pause — you review and submit (never
   auto-submitted).
 - If the LinkedIn session expires, re-run `linkedin/login.js`; for Workday, re-run
@@ -296,6 +302,12 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
+
+### 2026-07-16 — Bizneo adapter ([#7](https://github.com/davamix/assisted-job-apply/pull/7))
+
+- **Bizneo supported** — `scripts/bizneo/apply.js`. A public application form (no login) reached via the LinkedIn "Apply on company website" link.
+- Country/City are **select2** widgets driven through their real UI: setting the native value never fires the country→city cascade, and City is a **remote autocomplete** with no static option list. The dates use a JS datepicker, and the visually-hidden consent checkbox needs `check({ force: true })`.
+- Adds a `--dryRun` mode (headless, no human gate) to validate a fill end to end.
 
 ### 2026-07-15 — Workday adapter ([#4](https://github.com/davamix/assisted-job-apply/pull/4))
 
