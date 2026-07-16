@@ -21,6 +21,8 @@ scripts/
   teamtailor/                # Teamtailor external-apply adapter (apply only)
     apply.js
     probe-fields.js          # reconnaissance used to build a job's answers.json
+  bizneo/                    # Bizneo ATS external-apply adapter (apply only)
+    apply.js
   workday/                   # Workday external-apply adapter (session + apply)
     login.js  verify.js      # per-tenant candidate session -> .auth/workday-<tenant>-state.json
     session.js               # shared "is this session signed in?" probe
@@ -39,6 +41,7 @@ Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `con
 | linkedin   | ✓                      | ✓      | ✓                   | ✓                         |
 | bamboohr   | –                      | –      | –                   | ✓                         |
 | teamtailor | –                      | –      | –                   | ✓                         |
+| bizneo     | –                      | –      | –                   | ✓                         |
 | workday    | ✓ (per tenant)         | –      | –                   | ✓                         |
 
 External ATS sites are reached via the "Apply on company website" link found during
@@ -120,6 +123,28 @@ A portal adapter should:
   anchored on the group's hidden input, which sits higher in the DOM than the choice
   inputs; walking up from a choice input yields only the choice labels. Every choice click
   is confirmed with `isChecked()` before being reported as filled.
+
+- **bizneo** — the public application form (careers.ats.bizneo.cloud, reached via the
+  LinkedIn "Apply on company website" link with `?displayed_form=true`) needs **no login**.
+  Fields are Rails-named (`inscription_form[user_form][…]`), and three traps shape the adapter:
+  - **Country + City are select2 widgets, not plain `<select>`s.** Setting the native value
+    does not fire the `change` select2/htmx listen for, so the country→city htmx cascade
+    (`hx-get=/registration/new`, swaps `#user-region-id`) never runs. Both must be driven
+    through the select2 UI: open the `#select2-…-container`, type into
+    `input.select2-search__field`, click the matching `li.select2-results__option`.
+  - **City (`region_id`) is a select2 *remote* autocomplete** (`data-url=/suggest/locations`,
+    `data-minimum-input-length=3`) — there is no static option list. Type ≥3 chars and pick
+    from the AJAX results (e.g. "Barcelona, Barcelona, Cataluña, España").
+  - **The "Disponibilidad" dates use air-datepicker**: the submitted value lives on a hidden
+    real `<input>` (`data-component-datepicker="date"`), mirrored by a readonly visible one.
+    Click the visible field and the calendar's `.air-datepicker-cell.-current-` for "today",
+    else force-fill the real input with a `DD/MM/YYYY` string. "Disponibilidad hasta" is
+    required but odd for a permanent, open-ended candidate — the adapter leaves it blank
+    (only fills it from an explicit `availability_to`) and the human picks it at review.
+  - **Consent** is a Rails checkbox preceded by a hidden `value="0"` input sharing its name,
+    *and* the real checkbox is visually hidden (`opacity:0`, 1px, absolute) with the click
+    surface on its `<label>`, so a plain `.check()` sees it as non-actionable — use
+    `check({ force: true })` (which also avoids the privacy-policy `<a>` inside the label).
 
 - **workday** — the only portal so far needing an **account**: sign in once with
   `workday/login.js` (per tenant — a Workday account with one employer does not work for
