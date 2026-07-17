@@ -2,8 +2,8 @@
 
 Automation scripts, organized as **site-agnostic common utilities** plus **one folder per
 job portal**. The tool started LinkedIn-only and now supports external ATS portals
-(BambooHR, Teamtailor and Workday, with Greenhouse/Lever likely to follow), so each portal
-is an *adapter* implementing only the capabilities it supports.
+(BambooHR, Teamtailor, Bizneo, Workable and Workday, with Greenhouse/Lever likely to
+follow), so each portal is an *adapter* implementing only the capabilities it supports.
 
 ## Layout
 
@@ -23,6 +23,8 @@ scripts/
     probe-fields.js          # reconnaissance used to build a job's answers.json
   bizneo/                    # Bizneo ATS external-apply adapter (apply only)
     apply.js
+  workable/                  # Workable ATS external-apply adapter (apply only)
+    apply.js
   workday/                   # Workday external-apply adapter (session + apply)
     login.js  verify.js      # per-tenant candidate session -> .auth/workday-<tenant>-state.json
     session.js               # shared "is this session signed in?" probe
@@ -32,7 +34,7 @@ scripts/
 
 Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `config/`,
 `.auth/` resolve. The npm aliases in `package.json` wrap the common invocations
-(`npm run login|verify|search|detail|apply|apply:bamboohr|pdf`).
+(`npm run login|verify|search|detail|apply|apply:bamboohr|apply:teamtailor|apply:bizneo|apply:workable|apply:workday|pdf`).
 
 ## Capability matrix
 
@@ -42,6 +44,7 @@ Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `con
 | bamboohr   | –                      | –      | –                   | ✓                         |
 | teamtailor | –                      | –      | –                   | ✓                         |
 | bizneo     | –                      | –      | –                   | ✓                         |
+| workable   | –                      | –      | –                   | ✓                         |
 | workday    | ✓ (per tenant)         | –      | –                   | ✓                         |
 
 External ATS sites are reached via the "Apply on company website" link found during
@@ -63,6 +66,46 @@ LinkedIn triage, so they usually implement **apply only**.
   `.auth/linkedin-state.json` (resolved via `__dirname`).
 - **State/telemetry:** adapters print `EVENT {json}` lines and write a `*-state.json` into
   the output dir.
+
+## Bot-detection at submit (Cloudflare Turnstile & friends)
+
+Some ATS gate the **final Submit** with an anti-bot challenge — a Cloudflare **Turnstile**
+"Verify you are human" checkbox, or hCaptcha / reCAPTCHA. These challenges fingerprint the
+*browser*, not the data, and Playwright's **bundled Chromium advertises that it's automated**:
+the `--enable-automation` launch flag, `navigator.webdriver === true`, and the
+`AutomationControlled` blink feature. When the challenge sees those, the checkbox spins or
+fails **no matter how the human clicks it**. First seen on **Workable's** submit step
+(id 51); assume it can appear on any external portal (Greenhouse, Lever, etc. use Cloudflare
+too). It is distinct from BambooHR's reCAPTCHA, which a human solves normally — here the
+challenge is rejecting the *driven browser itself*.
+
+**Do not try to solve or bypass the challenge programmatically** — the human still clicks it.
+The only goal is to make the driven browser trustworthy enough that the human's click is
+accepted. Escalate in this order:
+
+1. **Strip the obvious automation tells at launch.** Safe to add to any adapter; always-on
+   in `workable/apply.js`:
+   ```js
+   const browser = await chromium.launch({
+     headless: false,
+     args: ['--disable-blink-features=AutomationControlled'],
+     ignoreDefaultArgs: ['--enable-automation'],
+   });
+   const ctx = await browser.newContext({ /* … */ });
+   await ctx.addInitScript(() => {
+     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+   });
+   ```
+2. **Drive a REAL installed browser** instead of bundled Chromium, via Playwright's
+   `channel` — real browsers clear Turnstile far more often. The Workable adapter takes
+   `--channel msedge` for this. On this machine **Chrome is not installed but Edge is**
+   (`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`), so `msedge` is the
+   go-to; use `chrome` where available. (Steps 1 + 2 together got id 51 past Turnstile.)
+3. **Hand the final submit to the human's own everyday browser.** If a hardened *managed*
+   challenge still blocks, stop fighting it: for a public, no-login form the automation adds
+   nothing but the auto-fill, so give the human the apply URL and the values to enter — the
+   adapter's `*-state.json` (`filled` / `pending`) and `*-filled.png` screenshot already
+   list them — and let them finish in their normal browser, where no bot-detection triggers.
 
 ## Documents: CV vs Résumé
 
@@ -145,6 +188,32 @@ A portal adapter should:
     *and* the real checkbox is visually hidden (`opacity:0`, 1px, absolute) with the click
     surface on its `<label>`, so a plain `.check()` sees it as non-actionable — use
     `check({ force: true })` (which also avoids the privacy-policy `<a>` inside the label).
+
+- **workable** — the public application form
+  (`apply.workable.com/<company>/j/<shortcode>/apply/`) is a React SPA reached via the
+  LinkedIn "Apply on company website" link (which lands on the *job* page; the form lives
+  at the `/apply/` sub-path — the adapter normalizes either URL). No login. It is a light
+  form, but four things shape the adapter:
+  - **Standard fields carry stable `name`s** (`firstname`, `lastname`, `email`, `phone`),
+    so identity is filled by name. Custom/screening questions are named `CA_<id>`
+    (job-specific), so they are matched by **label wording** from `answers.screening[]`,
+    never by a hardcoded name.
+  - **"Salary expectations" is a formatted-number field**, not free text: it strips
+    non-digits and formats with a dot thousands separator, and it treats `,` as a decimal
+    (so `"From 65,000 EUR"` collapses to `"65,00"`). Send a **plain integer** — `65000`
+    renders as `65.000`. "Negotiable / from …" can't live here; carry that in the follow-up.
+  - **Phone is an intl-tel-input widget.** Fill the full `+34 …` value and the widget
+    detects the country (the flag flips to Spain, the visible field keeps the national
+    part); typing only the national number inherits whatever flag is selected.
+  - **The CV/résumé slot's label sits ABOVE the drop-zone** in a `[class*="label"]` element
+    (e.g. "* Resume"), with the "*" required marker split into its own node — read/**join**
+    those fragments before classifying, or you only capture "*", fall through to `unknown`,
+    and wrongly attach the CV. On Workable the slot is genuinely **"Resume"**, so the
+    CV-vs-Résumé rule correctly attaches a tailored `output/<id>/resume.pdf`, not the CV.
+    Consent is a visually-hidden `gdpr` checkbox (same `check({ force: true })` trick as
+    Bizneo); the optional Address block uses a Places autocomplete and is left to the human.
+  - **Submit is gated by Cloudflare Turnstile** — see the section below; the adapter ships
+    the anti-detection launch flags always-on and takes `--channel msedge` to drive real Edge.
 
 - **workday** — the only portal so far needing an **account**: sign in once with
   `workday/login.js` (per tenant — a Workday account with one employer does not work for
