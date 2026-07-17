@@ -20,6 +20,7 @@
     "apply:bamboohr": "node scripts/bamboohr/apply.js",
     "apply:teamtailor": "node scripts/teamtailor/apply.js",
     "apply:bizneo": "node scripts/bizneo/apply.js",
+    "apply:workable": "node scripts/workable/apply.js",
     "login:workday": "node scripts/workday/login.js",
     "verify:workday": "node scripts/workday/verify.js",
     "apply:workday": "node scripts/workday/apply.js",
