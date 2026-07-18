@@ -45,8 +45,8 @@ everything.
 - ✅ **Apply** through the multi-step Easy Apply form — filling contact info, screening questions,
   compliance attestations, selecting the right resume, uploading a cover letter — then **stopping at
   the review page for your approval**.
-- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable and Workday today) have their own
-  *apply adapters* that fill the company form and pause for you to review and submit — same
+- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable, Workday and Greenhouse today) have
+  their own *apply adapters* that fill the company form and pause for you to review and submit — same
   never-auto-submit rule. See [Adapters](#adapters).
 
 ## How it works
@@ -85,6 +85,7 @@ screenshot, and **stop before submit**.
 | **Teamtailor** | apply | `npm run apply:teamtailor -- --url <careers-url> --id <dbId>` |
 | **Bizneo** | apply | `npm run apply:bizneo -- --url <careers-url> --id <dbId>` |
 | **Workable** | apply | `npm run apply:workable -- --url <careers-url> --id <dbId>` |
+| **Greenhouse** | apply | `npm run apply:greenhouse -- --url <apply-url> --id <dbId>` |
 | **Workday** | session (per tenant) · apply | `npm run login:workday -- --tenant <tenant-url>`, then `npm run apply:workday -- --url <job-url> --id <dbId>` |
 
 Worth knowing before you use one:
@@ -104,14 +105,22 @@ Worth knowing before you use one:
   (takes a plain integer — `65000` renders as `65.000`), the phone is an intl-tel-input widget, and
   the "Resume" upload genuinely asks for a résumé, so it gets a tailored one rather than the full CV.
   Also supports `--dryRun`. Its **Submit is gated by a Cloudflare Turnstile** — see the next note.
+- **Greenhouse** is a public form (no login). The application lives **inside an iframe** on the company
+  careers page (e.g. `careers.<company>.com/…/apply/?gh_jid=<id>`, pointing at Greenhouse's board —
+  Fever's is the EU board), so the adapter finds that frame and fills inside it. Its select questions
+  are **react-select comboboxes** (the chosen value shows in a `.select__single-value`, not the input),
+  the privacy authorization is a required single-option combobox, and the "Country" field is the phone
+  widget's dial-code selector. The "Resume/CV" slot takes the full CV; the cover letter is optional and
+  left blank. Supports `--dryRun`. Its **Submit is gated by an invisible reCAPTCHA Enterprise** — see the
+  next note.
 - **Some portals gate the final Submit with an anti-bot challenge** (Cloudflare Turnstile, hCaptcha,
   reCAPTCHA) that rejects Playwright's bundled Chromium by its automation fingerprint, so the "Verify
   you are human" checkbox fails no matter how you click it. The fix is to make the driven browser
-  trustworthy: the **Workable** adapter strips the automation tells at launch and accepts
+  trustworthy: the **Workable** and **Greenhouse** adapters strip the automation tells at launch and accept
   **`--channel msedge`** (or `chrome`) to drive a real installed browser, which clears the challenge —
   the same fix ports to any other adapter when a portal needs it. If a hardened challenge still blocks,
   just finish that one submit in your own everyday browser (nothing is lost for a no-login form). First
-  hit on Workable; assume any portal can do it.
+  hit on Workable (Turnstile); Greenhouse uses an invisible reCAPTCHA; assume any portal can do it.
 - Most portals ship a `probe-fields.js` — read-only reconnaissance that enumerates a form and its
   screening questions so a job's `answers.json` can be written against what the page really is.
 
@@ -131,6 +140,7 @@ full per-site quirk list — read it before adding a portal.
 | `scripts/teamtailor/apply.js` | Fill a Teamtailor external form and pause for you to submit. |
 | `scripts/bizneo/apply.js` | Fill a Bizneo external form and pause for you to submit. |
 | `scripts/workable/apply.js` | Fill a Workable external form and pause for you to submit. |
+| `scripts/greenhouse/apply.js` | Fill a Greenhouse external form and pause for you to submit. |
 | `scripts/workday/login.js` · `verify.js` | Per-tenant Workday candidate session → `.auth/`. |
 | `scripts/workday/apply.js` | Walk Workday's 5-step wizard and stop at Review. |
 | `scripts/<site>/probe-fields.js` | Read-only recon of a form, to build its `answers.json`. |
@@ -305,13 +315,13 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
   accessible labels/roles and stable text anchors, but LinkedIn changes its UI often — if a
   selector breaks, the diagnostic pattern in `docs/ARCHITECTURE.md` shows how to inspect and fix it.
 - **External application sites** — [supported portals](#adapters) have an *apply adapter* under
-  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday). Anything else (Greenhouse, Lever, …) is
+  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse). Anything else (Lever, …) is
   logged for you to complete manually. Adapters fill the form and pause — you review and submit (never
   auto-submitted).
-- **"Verify you are human" fails at submit** — a Cloudflare Turnstile (or similar) is rejecting the
-  automated browser. Re-run an adapter that supports it (Workable today) with **`--channel msedge`**
-  (or `chrome`) to drive a real installed browser; if it still blocks, finish that submit in your own
-  everyday browser. See [Adapters](#adapters).
+- **"Verify you are human" fails at submit** — a Cloudflare Turnstile / reCAPTCHA (or similar) is rejecting
+  the automated browser. Re-run an adapter that supports it (Workable, Greenhouse today) with **`--channel
+  msedge`** (or `chrome`) to drive a real installed browser; if it still blocks, finish that submit in your
+  own everyday browser. See [Adapters](#adapters).
 - If the LinkedIn session expires, re-run `linkedin/login.js`; for Workday, re-run
   `workday/login.js --tenant <tenant-url>` (`workday/verify.js` tells you whether it is still good).
 - Run scripts from the project root; if you must run from elsewhere, set `NODE_PATH` to the project's `node_modules`.
@@ -320,6 +330,11 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
+
+### 2026-07-18 — Greenhouse adapter ([#10](https://github.com/davamix/assisted-job-apply/pull/10))
+
+- **Greenhouse supported** — `scripts/greenhouse/apply.js`. A public application form (no login) served **inside an iframe** on the company careers page (`careers.<company>.com/…/apply/?gh_jid=<id>`, pointing at a Greenhouse board — the EU board `job-boards.eu.greenhouse.io` in this case); the adapter locates that frame and fills inside it. Identity fields by stable id, custom questions by `question_<id>` (falling back to label wording), and select questions driven as **react-select comboboxes** — the chosen value renders in a `.select__single-value`, not the input, so that is where the fill is verified. The privacy authorization is a required single-option combobox; the "Country" field is the phone widget's dial-code selector. The "Resume/CV" slot takes the full CV and the optional cover letter is left blank. Ships `probe-fields.js` + `probe-selects.js` recon and supports `--dryRun`.
+- **Submit gated by an invisible reCAPTCHA Enterprise** — no visible checkbox; it scores the browser when you click Submit. The adapter ships the anti-automation launch flags always-on and takes `--channel msedge`, same as Workable's Turnstile.
 
 ### 2026-07-17 — Workable adapter ([#9](https://github.com/davamix/assisted-job-apply/pull/9))
 
