@@ -2,7 +2,7 @@
 
 Automation scripts, organized as **site-agnostic common utilities** plus **one folder per
 job portal**. The tool started LinkedIn-only and now supports external ATS portals
-(BambooHR, Teamtailor, Bizneo, Workable and Workday, with Greenhouse/Lever likely to
+(BambooHR, Teamtailor, Bizneo, Workable, Workday and Greenhouse, with Lever likely to
 follow), so each portal is an *adapter* implementing only the capabilities it supports.
 
 ## Layout
@@ -25,6 +25,9 @@ scripts/
     apply.js
   workable/                  # Workable ATS external-apply adapter (apply only)
     apply.js
+  greenhouse/                # Greenhouse ATS external-apply adapter (apply only)
+    apply.js
+    probe-fields.js  probe-selects.js   # reconnaissance used to build a job's answers.json
   workday/                   # Workday external-apply adapter (session + apply)
     login.js  verify.js      # per-tenant candidate session -> .auth/workday-<tenant>-state.json
     session.js               # shared "is this session signed in?" probe
@@ -34,7 +37,7 @@ scripts/
 
 Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `config/`,
 `.auth/` resolve. The npm aliases in `package.json` wrap the common invocations
-(`npm run login|verify|search|detail|apply|apply:bamboohr|apply:teamtailor|apply:bizneo|apply:workable|apply:workday|pdf`).
+(`npm run login|verify|search|detail|apply|apply:bamboohr|apply:teamtailor|apply:bizneo|apply:workable|apply:greenhouse|apply:workday|pdf`).
 
 ## Capability matrix
 
@@ -45,6 +48,7 @@ Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `con
 | teamtailor | –                      | –      | –                   | ✓                         |
 | bizneo     | –                      | –      | –                   | ✓                         |
 | workable   | –                      | –      | –                   | ✓                         |
+| greenhouse | –                      | –      | –                   | ✓                         |
 | workday    | ✓ (per tenant)         | –      | –                   | ✓                         |
 
 External ATS sites are reached via the "Apply on company website" link found during
@@ -78,6 +82,13 @@ fails **no matter how the human clicks it**. First seen on **Workable's** submit
 (id 51); assume it can appear on any external portal (Greenhouse, Lever, etc. use Cloudflare
 too). It is distinct from BambooHR's reCAPTCHA, which a human solves normally — here the
 challenge is rejecting the *driven browser itself*.
+
+**Greenhouse** (id 52, Fever) gates submit with an **invisible reCAPTCHA Enterprise** (a
+`g-recaptcha-response` textarea + a `recaptcha.net/.../anchor` frame) — no visible checkbox;
+it scores the browser silently when the human clicks **Submit application**. Same defense:
+ship the anti-automation launch flags always-on (they are, in `greenhouse/apply.js`) and pass
+`--channel msedge` if a click is challenged. This is the invisible cousin of BambooHR's visible
+reCAPTCHA and Workable's Turnstile.
 
 **Do not try to solve or bypass the challenge programmatically** — the human still clicks it.
 The only goal is to make the driven browser trustworthy enough that the human's click is
@@ -214,6 +225,34 @@ A portal adapter should:
     Bizneo); the optional Address block uses a Places autocomplete and is left to the human.
   - **Submit is gated by Cloudflare Turnstile** — see the section below; the adapter ships
     the anti-detection launch flags always-on and takes `--channel msedge` to drive real Edge.
+
+- **greenhouse** — the application form is **served inside an iframe** named `grnhse_iframe`
+  on the company careers page (`careers.<company>.com/jobs/<id>/…/apply/?gh_jid=<id>`),
+  pointing at a Greenhouse board — Fever's is the **EU** board
+  (`job-boards.eu.greenhouse.io/embed/job_app`). The adapter finds that frame by URL and does
+  **every fill inside it** (`findFormFrame` waits for `#first_name`). Traps:
+  - **Standard identity fields carry stable ids** inside the frame (`#first_name`,
+    `#last_name`, `#preferred_name`, `#email`, `#phone`). Custom/screening questions are
+    `#question_<id>` — **job-specific ids**, so `answers.screening[]` matches by `question_id`
+    with `label_contains` (wording) as the stable fallback, and the adapter resolves the id
+    from the wording when only the label is given (ids shift when a posting is edited).
+  - **Select questions are react-select comboboxes**, not native `<select>`s. The
+    `#question_<id>` input is only a search box: after you click an option from the
+    `[role="option"]` listbox it is **cleared** (`opacity:0`, empty `value`) and the chosen
+    label renders in a sibling **`.select__single-value`** — so confirm the selection *there*,
+    never via `inputValue()` (which stays empty and reads as a false failure).
+  - **The GDPR/privacy authorization is itself a required combobox** with a single option
+    (`"Acknowledge/Confirm"`), not a checkbox — selecting it is the standing accept-policy
+    compliance default.
+  - **The "Country" field is the phone widget's country selector** (a react-select whose
+    option labels carry a **dial code**, e.g. `"Spain +34"`, and whose selected single-value
+    shows just the flag + `+34`) — match its option by **substring**, not an anchored string.
+    `#phone` (the number) is filled with the full `+34 …` value.
+  - **Résumé slot** is a real `input[type=file]#resume` under a **"Resume/CV"** heading
+    (classifies `cv` → default CV; no résumé authored). `#cover_letter` is **optional** and
+    left blank unless `answers.cover_letter_upload` is set.
+  - **Submit is gated by an invisible reCAPTCHA Enterprise** — see the section above; the
+    adapter ships the anti-detection flags always-on and takes `--channel msedge`.
 
 - **workday** — the only portal so far needing an **account**: sign in once with
   `workday/login.js` (per tenant — a Workday account with one employer does not work for
