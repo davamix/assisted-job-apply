@@ -331,7 +331,7 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
 
-### 2026-07-18 — Greenhouse adapter
+### 2026-07-18 — Greenhouse adapter ([#10](https://github.com/davamix/assisted-job-apply/pull/10))
 
 - **Greenhouse supported** — `scripts/greenhouse/apply.js`. A public application form (no login) served **inside an iframe** on the company careers page (`careers.<company>.com/…/apply/?gh_jid=<id>`, pointing at a Greenhouse board — the EU board `job-boards.eu.greenhouse.io` in this case); the adapter locates that frame and fills inside it. Identity fields by stable id, custom questions by `question_<id>` (falling back to label wording), and select questions driven as **react-select comboboxes** — the chosen value renders in a `.select__single-value`, not the input, so that is where the fill is verified. The privacy authorization is a required single-option combobox; the "Country" field is the phone widget's dial-code selector. The "Resume/CV" slot takes the full CV and the optional cover letter is left blank. Ships `probe-fields.js` + `probe-selects.js` recon and supports `--dryRun`.
 - **Submit gated by an invisible reCAPTCHA Enterprise** — no visible checkbox; it scores the browser when you click Submit. The adapter ships the anti-automation launch flags always-on and takes `--channel msedge`, same as Workable's Turnstile.
