@@ -90,6 +90,16 @@ ship the anti-automation launch flags always-on (they are, in `greenhouse/apply.
 `--channel msedge` if a click is challenged. This is the invisible cousin of BambooHR's visible
 reCAPTCHA and Workable's Turnstile.
 
+**A third kind: an emailed verification code (OTP).** On **Greenhouse** (id 118, Speechify) the
+submit step did *not* resolve through the reCAPTCHA the probe reported — after the human clicked
+**Submit application**, Greenhouse **emailed a verification code** that had to be typed into the
+page before the application was accepted. Unlike Turnstile and reCAPTCHA, this one does not
+fingerprint the browser at all, so **no launch flag or `--channel` makes any difference**: it
+requires the applicant's **inbox**. Two consequences: the human must be at the keyboard *with
+email access* when they submit, and a "clean" browser profile is not a workaround. Note the probe
+still reported `recaptcha:true` for this form — **marker detection tells you what is loaded, not
+which gate will actually fire**, so treat the probe's captcha markers as a hint, never a promise.
+
 **Do not try to solve or bypass the challenge programmatically** — the human still clicks it.
 The only goal is to make the driven browser trustworthy enough that the human's click is
 accepted. Escalate in this order:
@@ -226,11 +236,24 @@ A portal adapter should:
   - **Submit is gated by Cloudflare Turnstile** — see the section below; the adapter ships
     the anti-detection launch flags always-on and takes `--channel msedge` to drive real Edge.
 
-- **greenhouse** — the application form is **served inside an iframe** named `grnhse_iframe`
-  on the company careers page (`careers.<company>.com/jobs/<id>/…/apply/?gh_jid=<id>`),
-  pointing at a Greenhouse board — Fever's is the **EU** board
-  (`job-boards.eu.greenhouse.io/embed/job_app`). The adapter finds that frame by URL and does
-  **every fill inside it** (`findFormFrame` waits for `#first_name`). Traps:
+- **greenhouse** — comes in **two shapes**, and `findFormFrame` handles both:
+  1. **Embedded** (id 52, Fever): the form is inside an iframe named `grnhse_iframe` on the
+     company careers page (`careers.<company>.com/jobs/<id>/…/apply/?gh_jid=<id>`) pointing at
+     a Greenhouse board — Fever's is the **EU** board (`job-boards.eu.greenhouse.io/embed/job_app`).
+  2. **Direct** (id 118, Speechify): the form is on the **top-level page** of the Greenhouse
+     board itself (`job-boards.greenhouse.io/<company>/jobs/<id>`), no iframe at all —
+     `findFormFrame` simply returns the main frame.
+
+  The adapter does **every fill inside whichever frame it finds** (`findFormFrame` waits for
+  `#first_name`). Traps:
+  - **Finding the apply URL from LinkedIn:** the apply control may be an **`<a>` whose href
+    wraps a `grnh.se` short link** (inside a `linkedin.com/safety/go/?url=…` redirect), not a
+    `<button>`. `job-detail.js --captureExternal` only follows `<button>`s, so it reports
+    `apply_type:"unknown"` with a null `external_url` — read the `<a>`'s `href` out of the DOM
+    and resolve it with `curl -sIL` to get the real board URL.
+  - **Not every Greenhouse form has comboboxes.** Speechify's had **none** — 4 plain
+    text/textarea custom questions (`type:"text"` / `"textarea"` in `answers.screening[]`, both
+    handled by the same `fillById` branch). Probe first; don't assume the react-select path.
   - **Standard identity fields carry stable ids** inside the frame (`#first_name`,
     `#last_name`, `#preferred_name`, `#email`, `#phone`). Custom/screening questions are
     `#question_<id>` — **job-specific ids**, so `answers.screening[]` matches by `question_id`
@@ -251,8 +274,15 @@ A portal adapter should:
   - **Résumé slot** is a real `input[type=file]#resume` under a **"Resume/CV"** heading
     (classifies `cv` → default CV; no résumé authored). `#cover_letter` is **optional** and
     left blank unless `answers.cover_letter_upload` is set.
-  - **Submit is gated by an invisible reCAPTCHA Enterprise** — see the section above; the
-    adapter ships the anti-detection flags always-on and takes `--channel msedge`.
+  - **Submit gating varies by tenant** — Fever (id 52) used an **invisible reCAPTCHA
+    Enterprise**, while Speechify (id 118) instead demanded an **emailed verification code
+    (OTP)** even though the probe reported `recaptcha:true`. See the section above; the adapter
+    ships the anti-detection flags always-on and takes `--channel msedge`, but note that neither
+    helps against an OTP — that one needs the human's inbox.
+  - **Settle the cover letter *before* launching a real run.** An already-attached file cannot
+    be hot-swapped: revising `Cover letter.pdf` mid-session (id 118) meant signalling `CLOSE`,
+    deleting the `CLOSE` file again, and re-running so the new PDF was picked up. (Leaving
+    `CLOSE` in place makes the next run exit immediately.)
 
 - **workday** — the only portal so far needing an **account**: sign in once with
   `workday/login.js` (per tenant — a Workday account with one employer does not work for
