@@ -45,7 +45,7 @@ everything.
 - ✅ **Apply** through the multi-step Easy Apply form — filling contact info, screening questions,
   compliance attestations, selecting the right resume, uploading a cover letter — then **stopping at
   the review page for your approval**.
-- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable, Workday and Greenhouse today) have
+- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse and Viterbit today) have
   their own *apply adapters* that fill the company form and pause for you to review and submit — same
   never-auto-submit rule. See [Adapters](#adapters).
 
@@ -86,6 +86,7 @@ screenshot, and **stop before submit**.
 | **Bizneo** | apply | `npm run apply:bizneo -- --url <careers-url> --id <dbId>` |
 | **Workable** | apply | `npm run apply:workable -- --url <careers-url> --id <dbId>` |
 | **Greenhouse** | apply | `npm run apply:greenhouse -- --url <apply-url> --id <dbId>` |
+| **Viterbit** | apply | `npm run apply:viterbit -- --url <apply-url> --id <dbId>` |
 | **Workday** | session (per tenant) · apply | `npm run login:workday -- --tenant <tenant-url>`, then `npm run apply:workday -- --url <job-url> --id <dbId>` |
 
 Worth knowing before you use one:
@@ -113,6 +114,14 @@ Worth knowing before you use one:
   widget's dial-code selector. The "Resume/CV" slot takes the full CV; the cover letter is optional and
   left blank. Supports `--dryRun`. Its **Submit is gated by an invisible reCAPTCHA Enterprise** — see the
   next note.
+- **Viterbit** is a Spanish ATS that runs on the company's *own* careers domain (e.g.
+  `talento.between.tech`) — the "Hiring with Viterbit" footer is the only reliable tell. Public form, no
+  login, at the `/apply/` sub-path of the job page. Two things make it unlike the others: **Cloudflare
+  challenges the page load rather than the submit**, so the adapter runs a real headed browser by default
+  and there is no headless dry run; and its **radio questions arrive pre-checked on the first option**, so
+  an unanswered radio still submits an answer — the adapter sets every radio explicitly and reports any it
+  could not match along with the value the site would have sent. City is an AJAX-backed select2 with no
+  static options. Supports `--dryRun` (still opens a window; it just skips the review pause).
 - **Some portals gate the final Submit with an anti-bot challenge** (Cloudflare Turnstile, hCaptcha,
   reCAPTCHA) that rejects Playwright's bundled Chromium by its automation fingerprint, so the "Verify
   you are human" checkbox fails no matter how you click it. The fix is to make the driven browser
@@ -141,6 +150,7 @@ full per-site quirk list — read it before adding a portal.
 | `scripts/bizneo/apply.js` | Fill a Bizneo external form and pause for you to submit. |
 | `scripts/workable/apply.js` | Fill a Workable external form and pause for you to submit. |
 | `scripts/greenhouse/apply.js` | Fill a Greenhouse external form and pause for you to submit. |
+| `scripts/viterbit/apply.js` | Fill a Viterbit external form and pause for you to submit. |
 | `scripts/workday/login.js` · `verify.js` | Per-tenant Workday candidate session → `.auth/`. |
 | `scripts/workday/apply.js` | Walk Workday's 5-step wizard and stop at Review. |
 | `scripts/<site>/probe-fields.js` | Read-only recon of a form, to build its `answers.json`. |
@@ -315,13 +325,17 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
   accessible labels/roles and stable text anchors, but LinkedIn changes its UI often — if a
   selector breaks, the diagnostic pattern in `docs/ARCHITECTURE.md` shows how to inspect and fix it.
 - **External application sites** — [supported portals](#adapters) have an *apply adapter* under
-  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse). Anything else (Lever, …) is
+  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit). Anything else (Lever, …) is
   logged for you to complete manually. Adapters fill the form and pause — you review and submit (never
   auto-submitted).
 - **"Verify you are human" fails at submit** — a Cloudflare Turnstile / reCAPTCHA (or similar) is rejecting
   the automated browser. Re-run an adapter that supports it (Workable, Greenhouse today) with **`--channel
   msedge`** (or `chrome`) to drive a real installed browser; if it still blocks, finish that submit in your
   own everyday browser. See [Adapters](#adapters).
+- **The form never appears at all, just "Verificación de seguridad en curso"** — the same challenge, but
+  guarding the *page load* (Viterbit does this). No headless browser clears it; the adapter already runs
+  real headed Edge, so if it still hangs, open the apply URL in your own browser and fill from the values
+  in `output/<id>/answers.json`.
 - If the LinkedIn session expires, re-run `linkedin/login.js`; for Workday, re-run
   `workday/login.js --tenant <tenant-url>` (`workday/verify.js` tells you whether it is still good).
 - Run scripts from the project root; if you must run from elsewhere, set `NODE_PATH` to the project's `node_modules`.
@@ -330,6 +344,12 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
+
+### 2026-07-30 — Viterbit adapter
+
+- **Viterbit supported** — `scripts/viterbit/apply.js`. A Spanish ATS that serves each customer on their own careers domain (the *"Hiring with Viterbit"* footer is the tell, not the hostname); public form, no login, at the `/apply/` sub-path of the job page. Symfony-named fields (`apply[…]`), identity by name, screening questions by `question_id` with label-wording fallback, city driven as an AJAX-backed select2 with no static options, and the upload's real prompt read from the `.form-group` label ("Curriculum" → CV) rather than Bootstrap's empty filename `<label>`.
+- **Cloudflare gates the page load, not the submit** — a first for this project. Bundled Chromium fails it in either mode and even real Edge fails it *headless*, so the adapter defaults to `channel: 'msedge'` + `headless: false` and waits out the interstitial by polling the page title. `--dryRun` still opens a window; it only skips the review pause.
+- **Radio questions arrive pre-checked on their first option**, so leaving one alone silently submits an answer the candidate never gave — the opposite of a blank text field. Every radio is now set explicitly from `answers.json`, and an unmatched one is reported in `pending` together with the value the site would have posted. `answers.screening[]` gained an optional `verify` note for answers a human should confirm on screen.
 
 ### 2026-07-18 — Greenhouse adapter ([#10](https://github.com/davamix/assisted-job-apply/pull/10))
 

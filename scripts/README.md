@@ -28,6 +28,8 @@ scripts/
   greenhouse/                # Greenhouse ATS external-apply adapter (apply only)
     apply.js
     probe-fields.js  probe-selects.js   # reconnaissance used to build a job's answers.json
+  viterbit/                  # Viterbit ATS external-apply adapter (apply only)
+    apply.js
   workday/                   # Workday external-apply adapter (session + apply)
     login.js  verify.js      # per-tenant candidate session -> .auth/workday-<tenant>-state.json
     session.js               # shared "is this session signed in?" probe
@@ -49,6 +51,7 @@ Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `con
 | bizneo     | –                      | –      | –                   | ✓                         |
 | workable   | –                      | –      | –                   | ✓                         |
 | greenhouse | –                      | –      | –                   | ✓                         |
+| viterbit   | –                      | –      | –                   | ✓                         |
 | workday    | ✓ (per tenant)         | –      | –                   | ✓                         |
 
 External ATS sites are reached via the "Apply on company website" link found during
@@ -99,6 +102,19 @@ requires the applicant's **inbox**. Two consequences: the human must be at the k
 email access* when they submit, and a "clean" browser profile is not a workaround. Note the probe
 still reported `recaptcha:true` for this form — **marker detection tells you what is loaded, not
 which gate will actually fire**, so treat the probe's captcha markers as a hint, never a promise.
+
+**A fourth kind — and the worst-placed one: the challenge gates the PAGE LOAD.** On
+**Viterbit** (id 127, BETWEEN) Cloudflare does not wait for Submit at all: every request to
+the careers domain lands on a full-page interstitial ("Verificación de seguridad en curso" /
+"Un momento…") and the form is never rendered until it clears. That inverts the usual
+trade-off. With a submit-time gate you can still fill headlessly and only need a trustworthy
+browser at the end; here **an untrusted browser sees no form at all**, so the anti-detection
+measures are not an escalation you reach for after a failed click — they are the price of
+entry. Bundled Chromium fails it in both modes, and **even real Edge fails it headless**;
+only real Edge *headed* got through. Consequences: the Viterbit adapter ships
+`channel: 'msedge'` and `headless: false` as defaults rather than opt-ins, and **there is no
+headless dry run** — `--dryRun` still opens a window, it just skips the human gate afterwards.
+Check the page title, not the presence of a form element, to know whether you are through.
 
 **Do not try to solve or bypass the challenge programmatically** — the human still clicks it.
 The only goal is to make the driven browser trustworthy enough that the human's click is
@@ -283,6 +299,43 @@ A portal adapter should:
     be hot-swapped: revising `Cover letter.pdf` mid-session (id 118) meant signalling `CLOSE`,
     deleting the `CLOSE` file again, and re-running so the new PDF was picked up. (Leaving
     `CLOSE` in place makes the next run exit immediately.)
+
+- **viterbit** — a Spanish ATS serving each customer on **their own careers domain**
+  (BETWEEN at `talento.between.tech`); the *"Hiring with Viterbit"* footer is the only tell,
+  so identify it by that, not by the hostname. The job page is
+  `https://<careers-domain>/<job-slug>-<shortcode>/`, the form is at the `/apply/` sub-path
+  behind the "Inscribirme" CTA, and it needs **no login**. Fields are Symfony-named
+  (`apply[name]`, `apply[lastName]`, `apply[email]`, `apply[phone]`,
+  `apply[address][country]`, `apply[address][city]`, `apply[cvDocument][file]`,
+  `apply[questions][<24-hex-id>]`, `apply[terms]`). Four traps:
+  - ⚠️ **Cloudflare gates the PAGE LOAD, not the submit** — the single most important
+    difference from every other adapter here. See the bot-detection section above: the
+    adapter must run a **real browser, headed** (`channel: 'msedge'`, `headless: false` are
+    defaults, not flags), and it waits out the interstitial by polling the **page title**
+    before touching anything. There is no headless dry run.
+  - ⚠️ **Radio questions ship PRE-CHECKED on the first option.** BETWEEN's disability
+    question (`¿Dispones de certificado de discapacidad superior al 33%?`) arrives with
+    **"Si" already selected** in the markup, so *not answering it still POSTs an affirmative
+    answer the candidate never gave*. Leaving a radio alone is therefore **not neutral** —
+    unlike a blank text field, which is merely incomplete. Every radio must be set explicitly
+    from `answers.screening[]`, and the adapter reports any unmatched radio in `pending`
+    **together with the value the site would submit**, so the human can see what is at stake.
+    Add a `verify` note on answers like this one: they are filled, but only the human can
+    confirm a personal fact.
+  - **City is a select2 *remote* autocomplete** (`data-load="ajax_data"`,
+    `data-url="/talent-community/utils/cities/"`, `data-param="<ISO country>"`) with **zero
+    static options** — open the `#select2-apply_address_city-container`, type, and click the
+    AJAX result (e.g. "Barcelona Barcelona, España"). Country is an ordinary select2 and is
+    usually **pre-set** from the careers site's own locale (`ES` for BETWEEN), so read its
+    value first and only drive the widget when it is empty.
+  - **The upload's real prompt is the `label.col-form-label` of its `.form-group row`**
+    ("Curriculum" → classifies `cv` → default CV). Do **not** read
+    `label.custom-file-label` — that is Bootstrap's filename display and is empty, which
+    would classify `unknown`. Consent (`apply[terms]`) is the usual visually-hidden checkbox
+    with the click surface on its label: `check({ force: true })`, label-click fallback.
+  - Phone is an **intl-tel-input** (`data-rule-phoneintl`): fill the full `+34 …` and the flag
+    flips to Spain (verified on id 127 — the field legitimately keeps the `+34` prefix here,
+    unlike Workable's widget, which moves it into the flag selector).
 
 - **workday** — the only portal so far needing an **account**: sign in once with
   `workday/login.js` (per tenant — a Workday account with one employer does not work for
