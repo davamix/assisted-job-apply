@@ -35,5 +35,7 @@ Common fields the Easy Apply driver understands:
 - Résumé/CV upload (external ATS): `resume_upload` (path to the PDF attached to the résumé/CV file input — the default CV, an adapted `output/<id>/CV.pdf`, or an on-demand `output/<id>/resume.pdf`), `resume_doc_type` (`"cv"` | `"resume"`, recorded for auditing / the dashboard)
 - External-form extras (BambooHR): `country`, `state` (native-select labels), `desired_pay` (or derived from `salary_target`), and `screening` — a map of Yes/No screening answers, either `{ "customQuestionAnswers.yes_no_129": "Yes", … }` (by field name) or `[ { "question": "regex", "answer": "No" }, … ]` (by question text)
 
+- Screening entries (Greenhouse, Viterbit) may also carry `question_id` (the portal's own id, matched first) with `label_contains` as the wording fallback, plus an optional `verify` note — text shown back to you at the review gate for an answer that was filled but only you can confirm (a personal fact, or a figure that departs from `config/profile.json`)
+
 Most of these can be generated from `config/profile.json`; per-job files let you override anything
 (e.g. tailored experience numbers or a job-specific cover letter).

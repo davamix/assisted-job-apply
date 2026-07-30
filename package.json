@@ -22,6 +22,7 @@
     "apply:bizneo": "node scripts/bizneo/apply.js",
     "apply:workable": "node scripts/workable/apply.js",
     "apply:greenhouse": "node scripts/greenhouse/apply.js",
+    "apply:viterbit": "node scripts/viterbit/apply.js",
     "login:workday": "node scripts/workday/login.js",
     "verify:workday": "node scripts/workday/verify.js",
     "apply:workday": "node scripts/workday/apply.js",
