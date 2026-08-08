@@ -2,8 +2,8 @@
 
 Automation scripts, organized as **site-agnostic common utilities** plus **one folder per
 job portal**. The tool started LinkedIn-only and now supports external ATS portals
-(BambooHR, Teamtailor, Bizneo, Workable, Workday and Greenhouse, with Lever likely to
-follow), so each portal is an *adapter* implementing only the capabilities it supports.
+(BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit and Ashby, with Lever
+likely to follow), so each portal is an *adapter* implementing only the capabilities it supports.
 
 ## Layout
 
@@ -30,6 +30,9 @@ scripts/
     probe-fields.js  probe-selects.js   # reconnaissance used to build a job's answers.json
   viterbit/                  # Viterbit ATS external-apply adapter (apply only)
     apply.js
+  ashby/                     # Ashby ATS external-apply adapter (apply only)
+    apply.js
+    probe-fields.js          # reconnaissance used to build a job's answers.json
   workday/                   # Workday external-apply adapter (session + apply)
     login.js  verify.js      # per-tenant candidate session -> .auth/workday-<tenant>-state.json
     session.js               # shared "is this session signed in?" probe
@@ -39,7 +42,7 @@ scripts/
 
 Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `config/`,
 `.auth/` resolve. The npm aliases in `package.json` wrap the common invocations
-(`npm run login|verify|search|detail|apply|apply:bamboohr|apply:teamtailor|apply:bizneo|apply:workable|apply:greenhouse|apply:workday|pdf`).
+(`npm run login|verify|search|detail|apply|apply:bamboohr|apply:teamtailor|apply:bizneo|apply:workable|apply:greenhouse|apply:viterbit|apply:ashby|apply:workday|pdf`).
 
 ## Capability matrix
 
@@ -52,6 +55,7 @@ Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `con
 | workable   | –                      | –      | –                   | ✓                         |
 | greenhouse | –                      | –      | –                   | ✓                         |
 | viterbit   | –                      | –      | –                   | ✓                         |
+| ashby      | –                      | –      | –                   | ✓                         |
 | workday    | ✓ (per tenant)         | –      | –                   | ✓                         |
 
 External ATS sites are reached via the "Apply on company website" link found during
@@ -336,6 +340,41 @@ A portal adapter should:
   - Phone is an **intl-tel-input** (`data-rule-phoneintl`): fill the full `+34 …` and the flag
     flips to Spain (verified on id 127 — the field legitimately keeps the `+34` prefix here,
     unlike Workable's widget, which moves it into the flag selector).
+
+- **ashby** — a lean, public, no-login React form at
+  `jobs.ashbyhq.com/<org>/<jobId>/application`, reached via the LinkedIn "Apply on company
+  website" link. A company-hosted board (`<company>.com/careers?ashby_jid=<uuid>`) renders the
+  same form inline, so `findFormFrame` returns whichever frame holds `#_systemfield_name`.
+  Standard fields carry stable ids (`#_systemfield_name` — a single **Full Name**, not
+  first/last — plus `_systemfield_email`, `_systemfield_resume`, and optionally
+  `_systemfield_phone|linkedin|github|website`). Custom questions are per-posting **UUIDs**, so
+  `answers.screening[]` matches them by `label_contains` wording. Three traps:
+  - ⚠️ **There are TWO `input[type=file]` on the page.** The first is Ashby's **"Autofill from
+    resume"** widget, which parses an upload and *rewrites the form's fields*; the real slot is
+    the second, `#_systemfield_resume`. Taking `input[type=file]` first-match — which the
+    Workable adapter legitimately does on its own form — hits the autofill widget here and lets
+    Ashby's parser overwrite everything already filled. **Address the résumé slot by id.**
+  - ⚠️ **Boolean questions are a Yes/No BUTTON PAIR that behaves as a TOGGLE, not a radio
+    group** — and it is a trap twice over. First, the backing `input[type=checkbox]`
+    (`tabindex="-1"`, no id, `name=<uuid>`) is `checked` only for **Yes**, so `checked === false`
+    means *either* "answered No" *or* "never touched"; the selected button gains an
+    `_active_<hash>` class, so read **that** (same shape as Greenhouse's `.select__single-value`).
+    Second, **clicking the already-active option UNSETS it**, returning the question to
+    unanswered. That inverts a reviewing human's instinct: clicking "Yes" to *confirm* the
+    prefilled answer silently clears it, and Submit then fails with *"Missing entry for required
+    field"* on a question that was filled correctly. This is exactly how id 182's first submit
+    died. The adapter therefore attaches a verify note telling the human to **look, not click**.
+    Note this is the mirror image of Viterbit's pre-checked radios: there, leaving a control
+    alone submits an answer never given; here, clicking one to confirm withdraws the answer given.
+  - **Submit is gated by an invisible reCAPTCHA** (`g-recaptcha-response`). The anti-detection
+    launch flags are always-on and `--channel msedge` is available. Headless bundled Chromium is
+    **rejected outright** — a submit attempt from one is answered with *"Your application
+    submission was flagged as possible spam"*, which replaces the whole form, so there is no way
+    to reach field validation headlessly. `--dryRun` fills headlessly and never submits, which is
+    fine; anything that must survive a Submit click needs real Edge, headed.
+  - UUID ids frequently **start with a digit**, which is an invalid bare CSS selector
+    (`#4095773f-…` throws). Use an attribute selector or escape it; the adapter matches by label
+    wording and sidesteps this entirely.
 
 - **workday** — the only portal so far needing an **account**: sign in once with
   `workday/login.js` (per tenant — a Workday account with one employer does not work for

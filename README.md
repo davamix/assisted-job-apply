@@ -45,7 +45,7 @@ everything.
 - ✅ **Apply** through the multi-step Easy Apply form — filling contact info, screening questions,
   compliance attestations, selecting the right resume, uploading a cover letter — then **stopping at
   the review page for your approval**.
-- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse and Viterbit today) have
+- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit and Ashby today) have
   their own *apply adapters* that fill the company form and pause for you to review and submit — same
   never-auto-submit rule. See [Adapters](#adapters).
 
@@ -87,6 +87,7 @@ screenshot, and **stop before submit**.
 | **Workable** | apply | `npm run apply:workable -- --url <careers-url> --id <dbId>` |
 | **Greenhouse** | apply | `npm run apply:greenhouse -- --url <apply-url> --id <dbId>` |
 | **Viterbit** | apply | `npm run apply:viterbit -- --url <apply-url> --id <dbId>` |
+| **Ashby** | apply | `npm run apply:ashby -- --url <apply-url> --id <dbId>` |
 | **Workday** | session (per tenant) · apply | `npm run login:workday -- --tenant <tenant-url>`, then `npm run apply:workday -- --url <job-url> --id <dbId>` |
 
 Worth knowing before you use one:
@@ -122,6 +123,16 @@ Worth knowing before you use one:
   an unanswered radio still submits an answer — the adapter sets every radio explicitly and reports any it
   could not match along with the value the site would have sent. City is an AJAX-backed select2 with no
   static options. Supports `--dryRun` (still opens a window; it just skips the review pause).
+- **Ashby** is a lean public form (no login) at `jobs.ashbyhq.com/<org>/<jobId>/application`; a
+  company-hosted board (`<company>.com/careers?ashby_jid=<uuid>`) renders the same form inline and the
+  adapter finds it either way. Standard fields have stable ids (note **Full Name** is one field, not
+  first/last); custom questions are per-posting UUIDs matched by label wording. Two traps: the page has
+  **two file inputs** — the first is an "Autofill from resume" widget whose parser *rewrites the fields
+  you just filled*, so the résumé must be attached to `#_systemfield_resume` by id — and its **Yes/No
+  questions are toggles, not radio groups**, so clicking the already-selected option *unsets* it. That
+  last one bites humans, not scripts: clicking "Yes" to confirm a prefilled answer clears it and Submit
+  fails with "Missing entry for required field", so the adapter tells you to check the highlight rather
+  than click it. Submit is gated by an invisible reCAPTCHA — see the next note. Supports `--dryRun`.
 - **Some portals gate the final Submit with an anti-bot challenge** (Cloudflare Turnstile, hCaptcha,
   reCAPTCHA) that rejects Playwright's bundled Chromium by its automation fingerprint, so the "Verify
   you are human" checkbox fails no matter how you click it. The fix is to make the driven browser
@@ -129,7 +140,10 @@ Worth knowing before you use one:
   **`--channel msedge`** (or `chrome`) to drive a real installed browser, which clears the challenge —
   the same fix ports to any other adapter when a portal needs it. If a hardened challenge still blocks,
   just finish that one submit in your own everyday browser (nothing is lost for a no-login form). First
-  hit on Workable (Turnstile); Greenhouse uses an invisible reCAPTCHA; assume any portal can do it.
+  hit on Workable (Turnstile); Greenhouse and Ashby use an invisible reCAPTCHA; assume any portal can do
+  it. Ashby is the strictest seen so far: a Submit attempt from headless bundled Chromium is answered
+  with "flagged as possible spam" and the form is replaced outright, so real Edge headed is the only way
+  a submit gets through there.
 - Most portals ship a `probe-fields.js` — read-only reconnaissance that enumerates a form and its
   screening questions so a job's `answers.json` can be written against what the page really is.
 
@@ -151,6 +165,7 @@ full per-site quirk list — read it before adding a portal.
 | `scripts/workable/apply.js` | Fill a Workable external form and pause for you to submit. |
 | `scripts/greenhouse/apply.js` | Fill a Greenhouse external form and pause for you to submit. |
 | `scripts/viterbit/apply.js` | Fill a Viterbit external form and pause for you to submit. |
+| `scripts/ashby/apply.js` | Fill an Ashby external form and pause for you to submit. |
 | `scripts/workday/login.js` · `verify.js` | Per-tenant Workday candidate session → `.auth/`. |
 | `scripts/workday/apply.js` | Walk Workday's 5-step wizard and stop at Review. |
 | `scripts/<site>/probe-fields.js` | Read-only recon of a form, to build its `answers.json`. |
@@ -325,7 +340,7 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
   accessible labels/roles and stable text anchors, but LinkedIn changes its UI often — if a
   selector breaks, the diagnostic pattern in `docs/ARCHITECTURE.md` shows how to inspect and fix it.
 - **External application sites** — [supported portals](#adapters) have an *apply adapter* under
-  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit). Anything else (Lever, …) is
+  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby). Anything else (Lever, …) is
   logged for you to complete manually. Adapters fill the form and pause — you review and submit (never
   auto-submitted).
 - **"Verify you are human" fails at submit** — a Cloudflare Turnstile / reCAPTCHA (or similar) is rejecting
@@ -344,6 +359,13 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
+
+### 2026-08-08 — Ashby adapter
+
+- **Ashby supported** — `scripts/ashby/apply.js` + `probe-fields.js`. A lean public form (no login) at `jobs.ashbyhq.com/<org>/<jobId>/application`; a company-hosted board (`<company>.com/careers?ashby_jid=<uuid>`) renders the same form inline, so the adapter takes whichever frame holds `#_systemfield_name`. Identity by stable `_systemfield_*` ids — note **Full Name** is a single field, not first/last — and custom questions by per-posting UUID, matched on `label_contains` wording.
+- **Two file inputs, and the first one is a trap.** Ashby puts an *"Autofill from resume"* widget above the form whose parser **rewrites the fields already filled**; the real slot is the second input, `#_systemfield_resume`. Taking `input[type=file]` first-match — which is correct on Workable's form — silently hands the résumé to the parser here, so the slot is addressed by id.
+- **Yes/No questions are toggles, not radio groups** — clicking the already-selected option *unsets* it. This one bites the human, not the script: reviewing a filled form and clicking "Yes" to confirm it clears the answer, and Submit then fails with *"Missing entry for required field"* on a question that was filled correctly. Adapters can only report state, not intent, so any Yes/No answer now carries a verify note telling the reviewer to **check the highlight rather than click it**. It is the mirror image of Viterbit's pre-checked radios: there, leaving a control alone submits an answer never given; here, clicking one to confirm withdraws the answer given. Verification reads the button's `_active_` class, since the backing checkbox is unchecked for both "No" and "unanswered".
+- **Invisible reCAPTCHA at submit, and the strictest seen so far** — a Submit attempt from headless bundled Chromium is answered with *"flagged as possible spam"* and the form is replaced outright, so field validation is unreachable headlessly. Anti-detection flags are always-on and `--channel msedge` is available; `--dryRun` fills headlessly and never submits.
 
 ### 2026-07-30 — Viterbit adapter
 
