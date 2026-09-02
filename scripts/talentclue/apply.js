@@ -141,16 +141,18 @@ async function setShs(page, baseId, wanted, sub) {
   };
 }
 
-// TalentClue's phone field is validated as DIGITS ONLY — the canonical `+34 600 123 456`
-// kept in config/profile.json is rejected inline with «El número de teléfono debe ser
-// numérico. Por ejemplo "0034678901234" o "678901234"», which would block the human's
-// submit. Convert here rather than denormalising answers.json: strip separators and turn a
-// leading `+` into the international `00` prefix the form asks for.
+// TalentClue's phone field rejects SEPARATORS, not the `+`. The canonical
+// `+34 600 123 456` kept in config/profile.json fails inline with «El número de teléfono
+// debe ser numérico. Por ejemplo "0034678901234" o "678901234"» — whose wording reads as
+// "digits only", which is what this adapter first assumed. It is not: the spaces are the
+// problem. `+34600123456` submits fine (confirmed on id 89, where the applicant switched
+// the `00` back to `+` at the review gate and the submit went through). So strip the
+// separators and KEEP the leading `+` — the least transformation of the profile's own
+// format that the form accepts.
 function toTalentCluePhone(phone) {
   const s = String(phone || '').trim();
   if (!s) return s;
-  const digits = s.replace(/\D/g, '');
-  return s.startsWith('+') ? '00' + digits : digits;
+  return (s.startsWith('+') ? '+' : '') + s.replace(/\D/g, '');
 }
 
 async function fillById(page, id, value) {

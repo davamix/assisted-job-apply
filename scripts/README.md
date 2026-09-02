@@ -436,11 +436,18 @@ A portal adapter should:
     Ciclo Formativo Superior → *familia profesional* — and **the tid that gets submitted is the
     deepest one chosen**, so `answers.country_sub` / `answers.degree_sub` must be supplied.
     Confirm by reading the hidden input back, never the select you just set.
-  - ⚠️ **The phone field is validated as DIGITS ONLY.** The canonical `+34 600 123 456` from
-    `config/profile.json` is rejected inline with «El número de teléfono debe ser numérico.
-    Por ejemplo "0034678901234" o "678901234"», which blocks the human's submit. The adapter
-    converts (`+` → `00`, separators stripped) rather than denormalising `answers.json`. This
-    was invisible in the EVENT log and only showed up in the filled-form **screenshot** — read it.
+  - ⚠️ **The phone field rejects SEPARATORS — and its error message misdescribes why.** The
+    canonical `+34 600 123 456` from `config/profile.json` fails inline with «El número de
+    teléfono debe ser numérico. Por ejemplo "0034678901234" o "678901234"», which reads as
+    "digits only" and is what this adapter first assumed; it converted `+` → `00` on that
+    basis. **The `+` is fine — the spaces are the problem.** `+34600123456` submits (confirmed
+    on id 89, where the applicant switched the `00` back to `+` at the review gate and the
+    submit went through), so the adapter now strips separators and keeps the `+`: the least
+    transformation of the profile's own format that the form accepts. Two lessons, and the
+    second is the durable one: this was invisible in the EVENT log and only showed up in the
+    filled-form **screenshot** — read it; and **an inline validation message is a hint about
+    the rule, not the rule** — the narrowest fix that makes the error go away can be wider
+    than what the form actually requires.
   - **The file upload is AJAX and automatic** (Drupal behaviour `autoUpload` presses a hidden
     "Subir" button), so `setInputFiles` returning is not "uploaded". Poll the hidden
     `field_cv_file[und][0][fid]` input until it stops being `0`. The slot's label is a bare
