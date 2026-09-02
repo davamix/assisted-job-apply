@@ -45,7 +45,7 @@ everything.
 - ✅ **Apply** through the multi-step Easy Apply form — filling contact info, screening questions,
   compliance attestations, selecting the right resume, uploading a cover letter — then **stopping at
   the review page for your approval**.
-- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit and Ashby today) have
+- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby and TalentClue today) have
   their own *apply adapters* that fill the company form and pause for you to review and submit — same
   never-auto-submit rule. See [Adapters](#adapters).
 
@@ -88,6 +88,7 @@ screenshot, and **stop before submit**.
 | **Greenhouse** | apply | `npm run apply:greenhouse -- --url <apply-url> --id <dbId>` |
 | **Viterbit** | apply | `npm run apply:viterbit -- --url <apply-url> --id <dbId>` |
 | **Ashby** | apply | `npm run apply:ashby -- --url <apply-url> --id <dbId>` |
+| **TalentClue** | apply | `npm run apply:talentclue -- --url <job-or-apply-url> --id <dbId>` |
 | **Workday** | session (per tenant) · apply | `npm run login:workday -- --tenant <tenant-url>`, then `npm run apply:workday -- --url <job-url> --id <dbId>` |
 
 Worth knowing before you use one:
@@ -133,6 +134,16 @@ Worth knowing before you use one:
   last one bites humans, not scripts: clicking "Yes" to confirm a prefilled answer clears it and Submit
   fails with "Missing entry for required field", so the adapter tells you to check the highlight rather
   than click it. Submit is gated by an invisible reCAPTCHA — see the next note. Supports `--dryRun`.
+- **TalentClue** is a public **Drupal 7** form (no login) reached from the job page's "Inscríbete" link;
+  the adapter takes either URL. Everything unusual about it comes from its widgets: **every dropdown is a
+  hidden `<select>` wrapped by jQuery Chosen**, so it is driven through jQuery rather than `selectOption`,
+  and **País and Formación are hierarchical (SHS)** — picking "España" or "Ciclo Formativo Superior" spawns
+  a second dropdown (provincia / familia profesional) whose value is the one actually submitted, so
+  `country_sub` and `degree_sub` belong in `answers.json`. The **phone field takes digits only** (`+34 …`
+  is rejected outright), the CV upload is AJAX and is only done when its hidden `fid` stops being `0`, and
+  submit is gated by a **visible reCAPTCHA v2 checkbox** you tick. It also requires an **ID document number
+  and date of birth**: leave them out of `answers.json` and they are reported as pending for you to type at
+  the review gate. Supports `--dryRun`.
 - **Some portals gate the final Submit with an anti-bot challenge** (Cloudflare Turnstile, hCaptcha,
   reCAPTCHA) that rejects Playwright's bundled Chromium by its automation fingerprint, so the "Verify
   you are human" checkbox fails no matter how you click it. The fix is to make the driven browser
@@ -166,6 +177,7 @@ full per-site quirk list — read it before adding a portal.
 | `scripts/greenhouse/apply.js` | Fill a Greenhouse external form and pause for you to submit. |
 | `scripts/viterbit/apply.js` | Fill a Viterbit external form and pause for you to submit. |
 | `scripts/ashby/apply.js` | Fill an Ashby external form and pause for you to submit. |
+| `scripts/talentclue/apply.js` | Fill a TalentClue external form and pause for you to submit. |
 | `scripts/workday/login.js` · `verify.js` | Per-tenant Workday candidate session → `.auth/`. |
 | `scripts/workday/apply.js` | Walk Workday's 5-step wizard and stop at Review. |
 | `scripts/<site>/probe-fields.js` | Read-only recon of a form, to build its `answers.json`. |
@@ -340,7 +352,7 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
   accessible labels/roles and stable text anchors, but LinkedIn changes its UI often — if a
   selector breaks, the diagnostic pattern in `docs/ARCHITECTURE.md` shows how to inspect and fix it.
 - **External application sites** — [supported portals](#adapters) have an *apply adapter* under
-  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby). Anything else (Lever, …) is
+  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby, TalentClue). Anything else (Lever, …) is
   logged for you to complete manually. Adapters fill the form and pause — you review and submit (never
   auto-submitted).
 - **"Verify you are human" fails at submit** — a Cloudflare Turnstile / reCAPTCHA (or similar) is rejecting
@@ -359,6 +371,14 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
+
+### 2026-09-02 — TalentClue adapter
+
+- **TalentClue supported** — `scripts/talentclue/apply.js` + `probe-fields.js`, the ninth ATS. A public, no-login **Drupal 7** form (`form_id` `cv_node_form`) at `<company>.talentclue.com/<lang>/node/add/cv/job/<jobId>/company/<companyId>/<token>`, linked as "Inscríbete" from the job page; the adapter accepts either URL. Field ids are stable Drupal ids, but the posting's open questions (`#edit-oq<N>-answer`) are numbered in the order the recruiter typed them, so they are matched by label wording like every other adapter's screening questions.
+- **Every dropdown is a hidden `<select>` behind jQuery Chosen.** `selectOption` fails its actionability check, and forcing it would leave the visible control reading "- Escoge -" while skipping the `change` the page's own behaviours listen for. The adapter drives the native select through jQuery — `.val(v).trigger('change').trigger('chosen:updated')` — which sets the value, runs the dependent behaviours and repaints the widget together.
+- **The hierarchical fields hide the value that actually gets submitted.** País and Formación are SHS widgets: the element carrying the form `name` is a *hidden text input* holding a taxonomy tid, the visible dropdown is a generated `-select-1` with no name, and picking a level-1 value spawns a level-2 (provincia; familia profesional) whose tid **replaces** it. An adapter that stopped at level 1 would submit a plausible-looking wrong term, so sub-values are supplied via `country_sub` / `degree_sub` and the hidden input is read back to confirm.
+- **The screenshot caught a bug the EVENT log could not.** Every field reported filled and the phone still failed: TalentClue validates it as digits only and rejected the canonical `+34 600 123 456` inline, which would have blocked the human's submit. `inputValue()` said the field held exactly what was typed — the complaint lived in a sibling error node. The adapter now converts (`+` → `00`) instead of denormalising `answers.json`, and **reading the filled-form screenshot is the check that found it**.
+- **A form can require personal data the profile deliberately does not hold.** This one demands an identity-document type + number and a date of birth. When `answers.identity_document` / `answers.birth_date` are absent, the adapter reports them as `pending` with an explicit "not invented" note and leaves them for the human at the review gate — the same rule the degree fields already follow.
 
 ### 2026-08-08 — Ashby adapter
 

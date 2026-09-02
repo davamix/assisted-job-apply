@@ -2,8 +2,9 @@
 
 Automation scripts, organized as **site-agnostic common utilities** plus **one folder per
 job portal**. The tool started LinkedIn-only and now supports external ATS portals
-(BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit and Ashby, with Lever
-likely to follow), so each portal is an *adapter* implementing only the capabilities it supports.
+(BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby and TalentClue,
+with Lever likely to follow), so each portal is an *adapter* implementing only the
+capabilities it supports.
 
 ## Layout
 
@@ -33,6 +34,9 @@ scripts/
   ashby/                     # Ashby ATS external-apply adapter (apply only)
     apply.js
     probe-fields.js          # reconnaissance used to build a job's answers.json
+  talentclue/                # TalentClue ATS external-apply adapter (apply only)
+    apply.js
+    probe-fields.js          # reconnaissance used to build a job's answers.json
   workday/                   # Workday external-apply adapter (session + apply)
     login.js  verify.js      # per-tenant candidate session -> .auth/workday-<tenant>-state.json
     session.js               # shared "is this session signed in?" probe
@@ -42,7 +46,7 @@ scripts/
 
 Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `config/`,
 `.auth/` resolve. The npm aliases in `package.json` wrap the common invocations
-(`npm run login|verify|search|detail|apply|apply:bamboohr|apply:teamtailor|apply:bizneo|apply:workable|apply:greenhouse|apply:viterbit|apply:ashby|apply:workday|pdf`).
+(`npm run login|verify|search|detail|apply|apply:bamboohr|apply:teamtailor|apply:bizneo|apply:workable|apply:greenhouse|apply:viterbit|apply:ashby|apply:talentclue|apply:workday|pdf`).
 
 ## Capability matrix
 
@@ -56,6 +60,7 @@ Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `con
 | greenhouse | –                      | –      | –                   | ✓                         |
 | viterbit   | –                      | –      | –                   | ✓                         |
 | ashby      | –                      | –      | –                   | ✓                         |
+| talentclue | –                      | –      | –                   | ✓                         |
 | workday    | ✓ (per tenant)         | –      | –                   | ✓                         |
 
 External ATS sites are reached via the "Apply on company website" link found during
@@ -407,3 +412,43 @@ A portal adapter should:
 
   Every value is read back from the DOM before being reported as filled — on a form this
   indirect, a click that lands on nothing looks identical to one that works.
+
+- **talentclue** — a public, no-login **Drupal 7** form (`form_id` `cv_node_form`) at
+  `<company>.talentclue.com/<lang>/node/add/cv/job/<jobId>/company/<companyId>/<token>?clicked_button=apply_manually`,
+  linked as "Inscríbete" from the job page (`…/node/<jobId>/<token>`). The adapter accepts
+  either URL and resolves the job page to the form via its `a[href*="node/add/cv"]`. Field
+  ids are stable Drupal ids (`#edit-field-cv-email-und-0-email`, `-phone-`, `-name-`,
+  `-surname-`, `-city-`, `#edit-title`, `#edit-field-cv-link-und-0-url`), and the posting's
+  open questions are `#edit-oq<N>-answer` — but **N is positional**, assigned in the order the
+  recruiter typed the questions, so `answers.screening[]` matches them by `label_contains`
+  wording and follows the label's `for=`. Four traps:
+  - ⚠️ **Every `<select>` on the page is `display:none`, wrapped by jQuery *Chosen*.**
+    Playwright's `selectOption` fails its actionability check, and forcing it would leave the
+    visible Chosen control still reading "- Escoge -" *and* skip the `change` the page's own
+    behaviours listen for. Drive the native select through jQuery instead —
+    `$(el).val(v).trigger('change').trigger('chosen:updated')` — which sets the value, runs the
+    dependent behaviours and repaints the widget in one go. jQuery 1.12.4 is always on the page.
+  - ⚠️ **País and Formación are SHS (Simple Hierarchical Select) widgets, and stopping at
+    level 1 submits the wrong term.** The element carrying the form `name`
+    (`field_cv_country_iso[und][0][tid]`) is a *hidden text input* holding a taxonomy tid; the
+    dropdown the human sees is a JS-generated `<select id="<baseId>-select-1">` with no name,
+    itself Chosen-wrapped. Picking a level-1 value spawns a level-2 select — País → *provincia*,
+    Ciclo Formativo Superior → *familia profesional* — and **the tid that gets submitted is the
+    deepest one chosen**, so `answers.country_sub` / `answers.degree_sub` must be supplied.
+    Confirm by reading the hidden input back, never the select you just set.
+  - ⚠️ **The phone field is validated as DIGITS ONLY.** The canonical `+34 600 123 456` from
+    `config/profile.json` is rejected inline with «El número de teléfono debe ser numérico.
+    Por ejemplo "0034678901234" o "678901234"», which blocks the human's submit. The adapter
+    converts (`+` → `00`, separators stripped) rather than denormalising `answers.json`. This
+    was invisible in the EVENT log and only showed up in the filled-form **screenshot** — read it.
+  - **The file upload is AJAX and automatic** (Drupal behaviour `autoUpload` presses a hidden
+    "Subir" button), so `setInputFiles` returning is not "uploaded". Poll the hidden
+    `field_cv_file[und][0][fid]` input until it stops being `0`. The slot's label is a bare
+    **"Archivo"**, which classifies as `unknown` — but it is `field_cv_file` on a `cv_node_form`,
+    i.e. structurally the CV slot, so a CV is correct and the résumé rule is not triggered.
+
+  Submit is gated by a **visible reCAPTCHA v2 checkbox** ("No soy un robot"), which the human
+  solves — BambooHR's shape, not Greenhouse's invisible one. Note the form also requires an
+  **identity-document type + number and a date of birth**; when `answers.identity_document` /
+  `answers.birth_date` are absent the adapter reports them as `pending` for the human to type at
+  the review gate and invents nothing.
