@@ -61,6 +61,7 @@ Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `con
 | viterbit   | –                      | –      | –                   | ✓                         |
 | ashby      | –                      | –      | –                   | ✓                         |
 | talentclue | –                      | –      | –                   | ✓                         |
+| connexys   | –                      | –      | –                   | ✓                         |
 | workday    | ✓ (per tenant)         | –      | –                   | ✓                         |
 
 External ATS sites are reached via the "Apply on company website" link found during
@@ -459,3 +460,33 @@ A portal adapter should:
   **identity-document type + number and a date of birth**; when `answers.identity_document` /
   `answers.birth_date` are absent the adapter reports them as `pending` for the human to type at
   the review gate and invents nothing.
+
+- **connexys** — a Salesforce-native ATS (Bullhorn) whose careers site is an **Angular SPA** on the
+  customer's own domain (`/job/<18-char Salesforce id>/apply`), usually reached through an
+  `easyapply.jobs/r/<token>` redirector behind the LinkedIn "Apply on company website" link. Its Dutch
+  origin leaks into syndicated adverts as the headings *Functie-eisen* / *Arbeidsvoorwaarden* /
+  *Bedrijfsomschrijving* — a useful tell before you have opened the form. `networkidle` never fires
+  (third-party widgets poll forever), so navigation waits on `domcontentloaded` and then polls for a
+  field. Three real traps:
+  **(1) The CV upload parses the CV and OVERWRITES the identity fields.** The widget is a
+  `<span class="cxsFileUpload" fieldname="cxsrec__last_cv__c">` wrapping a *cross-origin* iframe on
+  `<tenant>.my.salesforce-sites.com/apex/cxsrec__cxsApplyFormDocument?…parseCV=true`, so there is **no
+  `input[type=file]` in the page** — the click has to be caught with Playwright's `filechooser` event.
+  Roughly 5-6 s after the file lands, the Salesforce parser writes *its own* guesses into first name /
+  last name / e-mail / phone, silently clobbering anything already typed there. The order is therefore
+  forced: **upload first, wait for the parse to settle, then fill the identity fields**, which doubles
+  as a correction pass. This is not cosmetic — on a Spanish two-surname name the parser dropped half of
+  it (a "García Fernández" comes back as "Fernández"), so letting the parse win would submit a wrong
+  legal name. Completion signal: the button label flips "Charger" → "Remplacer" and the filename appears.
+  **(2) Most fields in the DOM are recruiter-only and must not be touched.** Connexys renders its
+  back-office fields into the same form and merely hides them — 7 of 15 on the first tenant seen
+  (Titre de la Candidature, Type de candidat, Langue de communication, Type d'offre, **Origine**,
+  **Plateforme**, Marque). Origine and Plateforme look exactly like the standing
+  `how_did_you_find_out: LinkedIn` compliance answer, but they are the recruiter's own source-tracking,
+  pre-set by the ATS from the referer; writing to them would forge internal attribution. Every lookup
+  goes through `visibleFieldByLabel`, which skips hidden fields by design.
+  **(3) The selects carry no `name`** and their `cxsField_<n>` ids are positional (they shift per
+  tenant and per job), so fields are resolved by `<label for=…>` wording, never by index.
+  Note also that `required` is **not** set in the DOM — the `*` markers live only in the rendered
+  label, so the filled-form screenshot, not the attribute, is what tells you which fields actually
+  block submit. Supports `--dryRun`.

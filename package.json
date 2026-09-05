@@ -25,6 +25,7 @@
     "apply:viterbit": "node scripts/viterbit/apply.js",
     "apply:ashby": "node scripts/ashby/apply.js",
     "apply:talentclue": "node scripts/talentclue/apply.js",
+    "apply:connexys": "node scripts/connexys/apply.js",
     "login:workday": "node scripts/workday/login.js",
     "verify:workday": "node scripts/workday/verify.js",
     "apply:workday": "node scripts/workday/apply.js",
