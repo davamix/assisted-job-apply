@@ -2,8 +2,8 @@
 
 Automation scripts, organized as **site-agnostic common utilities** plus **one folder per
 job portal**. The tool started LinkedIn-only and now supports external ATS portals
-(BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby and TalentClue,
-with Lever likely to follow), so each portal is an *adapter* implementing only the
+(BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby, TalentClue and
+Connexys, with Lever likely to follow), so each portal is an *adapter* implementing only the
 capabilities it supports.
 
 ## Layout
@@ -37,6 +37,8 @@ scripts/
   talentclue/                # TalentClue ATS external-apply adapter (apply only)
     apply.js
     probe-fields.js          # reconnaissance used to build a job's answers.json
+  connexys/                  # Connexys ATS external-apply adapter (apply only)
+    apply.js
   workday/                   # Workday external-apply adapter (session + apply)
     login.js  verify.js      # per-tenant candidate session -> .auth/workday-<tenant>-state.json
     session.js               # shared "is this session signed in?" probe
@@ -46,7 +48,7 @@ scripts/
 
 Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `config/`,
 `.auth/` resolve. The npm aliases in `package.json` wrap the common invocations
-(`npm run login|verify|search|detail|apply|apply:bamboohr|apply:teamtailor|apply:bizneo|apply:workable|apply:greenhouse|apply:viterbit|apply:ashby|apply:talentclue|apply:workday|pdf`).
+(`npm run login|verify|search|detail|apply|apply:bamboohr|apply:teamtailor|apply:bizneo|apply:workable|apply:greenhouse|apply:viterbit|apply:ashby|apply:talentclue|apply:connexys|apply:workday|pdf`).
 
 ## Capability matrix
 
