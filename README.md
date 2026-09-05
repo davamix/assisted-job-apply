@@ -45,7 +45,7 @@ everything.
 - ✅ **Apply** through the multi-step Easy Apply form — filling contact info, screening questions,
   compliance attestations, selecting the right resume, uploading a cover letter — then **stopping at
   the review page for your approval**.
-- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby and TalentClue today) have
+- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby, TalentClue and Connexys today) have
   their own *apply adapters* that fill the company form and pause for you to review and submit — same
   never-auto-submit rule. See [Adapters](#adapters).
 
@@ -89,6 +89,7 @@ screenshot, and **stop before submit**.
 | **Viterbit** | apply | `npm run apply:viterbit -- --url <apply-url> --id <dbId>` |
 | **Ashby** | apply | `npm run apply:ashby -- --url <apply-url> --id <dbId>` |
 | **TalentClue** | apply | `npm run apply:talentclue -- --url <job-or-apply-url> --id <dbId>` |
+| **Connexys** | apply | `npm run apply:connexys -- --url <job-or-apply-url> --id <dbId>` |
 | **Workday** | session (per tenant) · apply | `npm run login:workday -- --tenant <tenant-url>`, then `npm run apply:workday -- --url <job-url> --id <dbId>` |
 
 Worth knowing before you use one:
@@ -145,6 +146,15 @@ Worth knowing before you use one:
   submit is gated by a **visible reCAPTCHA v2 checkbox** you tick. It also requires an **ID document number
   and date of birth**: leave them out of `answers.json` and they are reported as pending for you to type at
   the review gate. Supports `--dryRun`.
+- **Connexys** is a Salesforce-native ATS (Bullhorn) behind an **Angular careers SPA**, usually reached
+  through an `easyapply.jobs` redirector; adverts syndicated from it carry the Dutch headings
+  *Functie-eisen* / *Arbeidsvoorwaarden* / *Bedrijfsomschrijving*. Two things to know: its **CV upload
+  parses the CV and overwrites the name/e-mail/phone fields a few seconds later**, so the adapter
+  uploads first and then fills over the parser's guesses (it truncated a two-surname Spanish name), and
+  **most fields in the DOM are the recruiter's own hidden back-office fields** — including "Origine"
+  and "Plateforme", which look like source-tracking you should answer but are not yours to set. Only
+  visible fields are touched. Supports `--dryRun`.
+
 - **Some portals gate the final Submit with an anti-bot challenge** (Cloudflare Turnstile, hCaptcha,
   reCAPTCHA) that rejects Playwright's bundled Chromium by its automation fingerprint, so the "Verify
   you are human" checkbox fails no matter how you click it. The fix is to make the driven browser
@@ -179,6 +189,7 @@ full per-site quirk list — read it before adding a portal.
 | `scripts/viterbit/apply.js` | Fill a Viterbit external form and pause for you to submit. |
 | `scripts/ashby/apply.js` | Fill an Ashby external form and pause for you to submit. |
 | `scripts/talentclue/apply.js` | Fill a TalentClue external form and pause for you to submit. |
+| `scripts/connexys/apply.js` | Fill a Connexys external form and pause for you to submit. |
 | `scripts/workday/login.js` · `verify.js` | Per-tenant Workday candidate session → `.auth/`. |
 | `scripts/workday/apply.js` | Walk Workday's 5-step wizard and stop at Review. |
 | `scripts/<site>/probe-fields.js` | Read-only recon of a form, to build its `answers.json`. |
@@ -353,7 +364,7 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
   accessible labels/roles and stable text anchors, but LinkedIn changes its UI often — if a
   selector breaks, the diagnostic pattern in `docs/ARCHITECTURE.md` shows how to inspect and fix it.
 - **External application sites** — [supported portals](#adapters) have an *apply adapter* under
-  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby, TalentClue). Anything else (Lever, …) is
+  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby, TalentClue, Connexys). Anything else (Lever, …) is
   logged for you to complete manually. Adapters fill the form and pause — you review and submit (never
   auto-submitted).
 - **"Verify you are human" fails at submit** — a Cloudflare Turnstile / reCAPTCHA (or similar) is rejecting
@@ -372,6 +383,13 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
+
+### 2026-09-05 — Connexys adapter
+
+- **Connexys supported** — `scripts/connexys/apply.js`, the tenth ATS. Connexys is a Salesforce-native ATS (Bullhorn) whose careers site is an **Angular SPA** on the customer's own domain (`/job/<18-char Salesforce id>/apply`), reached from LinkedIn through an `easyapply.jobs/r/<token>` redirector. Its Dutch origin leaks into syndicated adverts as the headings *Functie-eisen* / *Arbeidsvoorwaarden* / *Bedrijfsomschrijving*, which is a usable tell before the form is ever opened. `networkidle` never fires on the page, so navigation waits on `domcontentloaded` and polls for a field.
+- **The CV upload parses the CV and overwrites the identity fields — so the fill order is forced.** The upload widget wraps a *cross-origin* Salesforce iframe (`…/apex/cxsrec__cxsApplyFormDocument?…parseCV=true`), so there is no `input[type=file]` in the page at all and the click has to be caught with Playwright's `filechooser` event. About 5-6 s after the file lands, the parser writes its own guesses into first name / last name / e-mail / phone, clobbering anything already typed. The adapter therefore **uploads first, waits for the parse to settle, then fills the identity fields**, and reports any value it had to correct. That is not tidiness: on a Spanish two-surname name the parser dropped half of it (a "García Fernández" comes back as "Fernández"), so accepting the parse would have submitted a wrong legal name.
+- **Most of the form's fields belong to the recruiter, not the applicant.** Connexys renders its back-office fields into the same form and only hides them with CSS — 7 of 15 on the first tenant seen. Two of them, **"Origine"** and **"Plateforme"**, read exactly like the standing *how did you hear about us → LinkedIn* answer, but they are the recruiter's internal source-tracking, pre-set from the referer; filling them would forge attribution. Every lookup goes through a visible-only label resolver, which also handles the selects carrying **no `name`** and positional `cxsField_<n>` ids.
+- **`required` is not in the DOM — it is only in the rendered label.** Every field reports `required: false` while the page draws `*` markers on five of them. The filled-form screenshot, not the attribute, is what tells you which fields actually block submit; it is what confirmed that the deliberately-unanswered postcode and RQTH questions are optional.
 
 ### 2026-09-02 — TalentClue adapter
 
