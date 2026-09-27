@@ -50,77 +50,113 @@ function buildUrl(a) {
     process.exit(3);
   }
 
-  // The results list is virtualized — scroll the scrollable list container to load cards.
-  await page.evaluate(async () => {
-    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    const findScroller = () =>
-      document.querySelector('.jobs-search-results-list') ||
-      document.querySelector('div.scaffold-layout__list > div') ||
-      document.querySelector('.scaffold-layout__list') ||
-      document.scrollingElement;
-    const scroller = findScroller();
-    for (let i = 0; i < 12; i++) {
-      scroller.scrollBy(0, 800);
-      window.scrollBy(0, 400);
-      await sleep(500);
-    }
-    scroller.scrollTo(0, 0);
-    await sleep(400);
-  });
-
+  // The results list is virtualized — scroll the scrollable list container and collect cards
+  // at every step (cards scrolled past can be unmounted, so extracting only at the end loses them).
+  // Two layouts are handled:
+  //  - new UI (/jobs/search-results/, seen 2026-09): /jobs/search/ redirects there. Cards are
+  //    div[role=button][componentkey="job-card-component-ref-<jobId>"], no /jobs/view/ links;
+  //    <p>s in order = title, company, location. Scroller = [data-testid="lazy-column"].
+  //  - old UI: li[data-occludable-job-id] / div.job-card-container[data-job-id] with class hooks.
   const max = parseInt(a.max, 10) || 25;
-  const jobs = await page.evaluate((max) => {
+  const jobs = await page.evaluate(async (max) => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const clean = (s) => (s || '').trim().replace(/\s+/g, ' ') || null;
     const text = (el, sels) => {
       for (const s of sels) {
         const n = el.querySelector(s);
-        if (n && n.textContent.trim()) return n.textContent.trim().replace(/\s+/g, ' ');
+        if (n && n.textContent.trim()) return clean(n.textContent);
       }
       return null;
     };
-    const cardSel = [
-      'li[data-occludable-job-id]',
-      'div.job-card-container[data-job-id]',
-      'li.scaffold-layout__list-item',
-      'li.jobs-search-results__list-item',
-    ];
-    let cards = [];
-    for (const s of cardSel) {
-      cards = Array.from(document.querySelectorAll(s));
-      if (cards.length) break;
-    }
-    const out = [];
-    const seen = new Set();
-    for (const c of cards) {
+    const NEW_KEY = 'job-card-component-ref-';
+
+    const fromNewCard = (c) => {
+      const id = c.getAttribute('componentkey').slice(NEW_KEY.length);
+      const ps = Array.from(c.querySelectorAll('p'));
+      // On some cards the title <p> holds an accessible span ("Selected, Title (Verified job)")
+      // plus an aria-hidden visual copy: drop the copy, then the screen-reader prefix/suffix.
+      let role = null;
+      if (ps[0]) {
+        const t = ps[0].cloneNode(true);
+        t.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove());
+        role = (clean(t.textContent) || clean(ps[0].textContent) || '')
+          .replace(/^Selected,\s*/, '').replace(/\s*\(Verified job\)$/, '') || null;
+      }
+      return { id, role, company: clean(ps[1]?.textContent), location: clean(ps[2]?.textContent) };
+    };
+
+    const fromOldCard = (c) => {
       let id = c.getAttribute('data-occludable-job-id') || c.getAttribute('data-job-id');
       const link = c.querySelector('a[href*="/jobs/view/"]');
       if (!id && link) {
         const m = link.getAttribute('href').match(/\/jobs\/view\/(\d+)/);
         if (m) id = m[1];
       }
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      const role = text(c, [
-        '.job-card-list__title--link', '.job-card-list__title',
-        'a.job-card-container__link', '.artdeco-entity-lockup__title',
-      ]);
-      const company = text(c, [
-        '.job-card-container__primary-description',
-        '.artdeco-entity-lockup__subtitle', '.job-card-container__company-name',
-      ]);
-      const location = text(c, [
-        '.job-card-container__metadata-item', '.artdeco-entity-lockup__caption',
-        '.job-card-container__metadata-wrapper',
-      ]);
-      out.push({
-        source_job_id: id,
-        role,
-        company,
-        location,
-        url: `https://www.linkedin.com/jobs/view/${id}/`,
-      });
-      if (out.length >= max) break;
+      return {
+        id,
+        role: text(c, [
+          '.job-card-list__title--link', '.job-card-list__title',
+          'a.job-card-container__link', '.artdeco-entity-lockup__title',
+        ]),
+        company: text(c, [
+          '.job-card-container__primary-description',
+          '.artdeco-entity-lockup__subtitle', '.job-card-container__company-name',
+        ]),
+        location: text(c, [
+          '.job-card-container__metadata-item', '.artdeco-entity-lockup__caption',
+          '.job-card-container__metadata-wrapper',
+        ]),
+      };
+    };
+
+    const found = new Map();
+    const collect = () => {
+      const newCards = document.querySelectorAll(`div[role="button"][componentkey^="${NEW_KEY}"]`);
+      if (newCards.length) {
+        for (const c of newCards) {
+          const j = fromNewCard(c);
+          if (j.id && !found.has(j.id)) found.set(j.id, j);
+        }
+        return;
+      }
+      const oldSel = [
+        'li[data-occludable-job-id]',
+        'div.job-card-container[data-job-id]',
+        'li.scaffold-layout__list-item',
+        'li.jobs-search-results__list-item',
+      ];
+      for (const s of oldSel) {
+        const cards = document.querySelectorAll(s);
+        if (!cards.length) continue;
+        for (const c of cards) {
+          const j = fromOldCard(c);
+          if (j.id && !found.has(j.id)) found.set(j.id, j);
+        }
+        break;
+      }
+    };
+
+    const scroller =
+      document.querySelector('[data-testid="lazy-column"]') ||
+      document.querySelector('.jobs-search-results-list') ||
+      document.querySelector('div.scaffold-layout__list > div') ||
+      document.querySelector('.scaffold-layout__list') ||
+      document.scrollingElement;
+    collect();
+    for (let i = 0; i < 12 && found.size < max; i++) {
+      scroller.scrollBy(0, 800);
+      window.scrollBy(0, 400);
+      await sleep(500);
+      collect();
     }
-    return out;
+
+    return Array.from(found.values()).slice(0, max).map((j) => ({
+      source_job_id: j.id,
+      role: j.role,
+      company: j.company,
+      location: j.location,
+      url: `https://www.linkedin.com/jobs/view/${j.id}/`,
+    }));
   }, max);
 
   if (a.debugShot) await page.screenshot({ path: a.debugShot, fullPage: false });
