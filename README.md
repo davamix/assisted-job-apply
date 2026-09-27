@@ -384,6 +384,11 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
 
+### 2026-09-27 — LinkedIn search: new results layout
+
+- **`linkedin/search.js` reads LinkedIn's new job-search page.** `/jobs/search/` now redirects to `/jobs/search-results/`, where the old card hooks (`li[data-occludable-job-id]`, `.job-card-container`) no longer exist, so every search returned an empty array **with exit code 0** — check the card count, not the exit status. Cards are now `div[role=button][componentkey="job-card-component-ref-<jobId>"]` with no `/jobs/view/` links; the job id comes from that attribute, and title / company / location from the card's `<p>`s in order (the title's screen-reader prefix/suffix, `Selected, …` and `… (Verified job)`, is stripped). The filters and `--start` pagination survive the redirect. The old layout is kept as a fallback.
+- **Cards are collected while scrolling**, not once at the end, since the results column is lazily rendered.
+
 ### 2026-09-05 — Connexys adapter
 
 - **Connexys supported** — `scripts/connexys/apply.js`, the tenth ATS. Connexys is a Salesforce-native ATS (Bullhorn) whose careers site is an **Angular SPA** on the customer's own domain (`/job/<18-char Salesforce id>/apply`), reached from LinkedIn through an `easyapply.jobs/r/<token>` redirector. Its Dutch origin leaks into syndicated adverts as the headings *Functie-eisen* / *Arbeidsvoorwaarden* / *Bedrijfsomschrijving*, which is a usable tell before the form is ever opened. `networkidle` never fires on the page, so navigation waits on `domcontentloaded` and polls for a field.
