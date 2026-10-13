@@ -27,11 +27,11 @@ Documents produced before that change keep their own headers and are left as his
 
 ## `answers.json` keys (form auto-fill)
 Common fields the Easy Apply driver understands:
-- Identity/contact: `first_name`, `last_name`, `full_name`, `email`, `phone`, `phone_country_code`, `city`, `linkedin`, `website`
+- Identity/contact: `first_name`, `last_name`, `full_name`, `email`, `phone`, `phone_country_code`, `city`, `linkedin`, `website`, `gender` (only when a form requires it; the candidate's own answer, never inferred)
 - Experience (years): `years_total`, `years_dotnet`, `years_ai`, `years_python`, `years_pytorch`, `years_mlops`
-- Screening: `authorized_spain`, `authorized_us`, `sponsorship`, `notice`, `english_level`, `education`, `hear_about`, `salary_target`
+- Screening: `authorized_spain`, `authorized_us`, `sponsorship`, `notice`, `english_level`, `education`, `hear_about`, `salary_target`, `currency` (e.g. `"EUR"`, for the currency picker next to a salary field)
 - Compliance: `conflict` (Yes/No), `conflict_details` (text when "No" → usually `"N/A"`), `consent` (accept policy)
-- Files: `cv_filename_hint` (substring to pick the right resume on LinkedIn, e.g. `"CV"`), `cover_letter_pdf` (path to upload), `cover_letter` (plain text for any text box)
+- Files: `cv_filename_hint` (substring to pick the CV on LinkedIn, e.g. `"CV"`), `cover_letter_pdf` (path to upload), `cover_letter` (plain text for the letter box; it replaces whatever LinkedIn pre-filled). With no letter for a letter slot, or no matching document for the CV/Résumé ask, the Easy Apply driver holds that page (`needs_input`) so the right one can be prepared and the run repeated.
 - Résumé/CV upload (external ATS): `resume_upload` (path to the PDF attached to the résumé/CV file input — the default CV, an adapted `output/<id>/CV.pdf`, or an on-demand `output/<id>/resume.pdf`), `resume_doc_type` (`"cv"` | `"resume"`, recorded for auditing / the dashboard)
 - External-form extras (BambooHR): `country`, `state` (native-select labels), `desired_pay` (or derived from `salary_target`), and `screening` — a map of Yes/No screening answers, either `{ "customQuestionAnswers.yes_no_129": "Yes", … }` (by field name) or `[ { "question": "regex", "answer": "No" }, … ]` (by question text)
 - External-form extras (Connexys): `postcode`, `contract_type` (the option wording, e.g. `"CDI"` for a permanent contract), `availability` (e.g. `"Immédiate"`), `rqth` (the French disability-accommodation question), and `link_url` for the LinkedIn profile field. Any of these left `null` is reported as `pending` at the review gate rather than guessed — the postcode and RQTH answers are personal data that may deliberately not be on record.
