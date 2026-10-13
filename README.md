@@ -392,7 +392,7 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
 
-### 2026-10-13 — Easy Apply: position-specific letters, the document the form asks for
+### 2026-10-13 — Easy Apply: position-specific letters, the document the form asks for ([#16](https://github.com/davamix/assisted-job-apply/pull/16))
 
 - **LinkedIn pre-fills the cover-letter box with your previous application's letter**, addressed to that other company. The driver only filled *empty* boxes, so it kept the stale letter. Now any prefill is replaced by `answers.cover_letter`; with no letter supplied, the box is cleared and the page is **held** (`needs_cover_letter`), even when the slot is optional, so every letter is written for the position at hand. The same hold applies to a cover-letter *upload* slot.
 - **The document sent is the one the form asks for.** A "Resume" slot with no résumé prepared used to log `needs_resume` and carry on, and LinkedIn auto-selects the most recently used file, so the CV went out in its place. A CV slot where the CV can't be confirmed as selected is now held too (`needs_cv`), since the latest upload may be a résumé tailored for another posting. The form label decides, never the job description. Holds are skipped on the final review page, which only summarises earlier choices.
