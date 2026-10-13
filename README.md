@@ -270,16 +270,22 @@ Decide fit, then record it, e.g.:
 python db/jobs_db.py set-status --id <dbId> --status skipped --notes "below salary floor"
 ```
 
-**4. Prepare artifacts** (optional): write `output/<dbId>/Cover letter.md`, then
+**4. Prepare artifacts** — for the form you actually see. Run step 5 first: the driver **holds
+the page** (status `needs_input`) when the form has a cover-letter slot and no letter was supplied,
+or asks for a document you haven't prepared, so nothing is written in advance and nothing generic
+is sent. Every cover letter is written for that position: write `output/<dbId>/Cover letter.md`,
+then put its text in `answers.json` → `cover_letter` for a text box, or render it for an upload:
 ```bash
 node scripts/common/md-to-pdf.js --in "output/<dbId>/Cover letter.md" --out "output/<dbId>/Cover letter.pdf"
 ```
 Write only the letter itself — the letterhead (name, contacts, date) is generated from
 `config/profile.json`, and the template is picked from the filename.
 
-If a form asks specifically for a **Résumé** (not a CV), write a shorter, role-tailored
-`output/<dbId>/resume.md` (condensed from your CV) and render it the same way to `resume.pdf`
-(add `--role "…"` to tailor its title line); point `answers.json` → `resume_upload` at that PDF.
+The **form** decides which document to attach, not the job description: the company configured
+the form, so its upload slot is the real ask. A **CV** slot ("CV", "Currículum") gets your CV.
+A **Résumé** slot gets a shorter, role-tailored `output/<dbId>/resume.md` (condensed from your CV),
+rendered the same way to `resume.pdf` (add `--role "…"` to tailor its title line); point
+`answers.json` → `resume_upload` at that PDF.
 If it asks for a **presentation letter** instead of a cover letter, render the reusable
 `assets/presentation-letter.md`. See [templates/README.md](templates/README.md) for which document
 to use when, and [scripts/README.md](scripts/README.md) for the adapter contract.
@@ -306,6 +312,8 @@ python db/jobs_db.py set-status --id <dbId> --status applied --notes "…"
 `linkedin/easyapply.js` writes `output/<jobId>/state.json` with a `status`:
 - `ready_for_approval` — everything filled; waiting for you.
 - `needs_input` — a required field it couldn't answer; complete it in the live browser, then `APPROVE`.
+  Also used for a **document hold** (`needs_cover_letter`, `needs_resume` or `needs_cv` in the event
+  log): prepare the letter or document, `ABORT`, and run the driver again.
 - `applied` / `aborted` / `timeout` — terminal.
 
 It polls for `APPROVE`/`ABORT` for `--timeoutMs` (default 15 min). See `output/README.md` for every artifact.
@@ -383,6 +391,12 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
+
+### 2026-10-13 — Easy Apply: position-specific letters, the document the form asks for
+
+- **LinkedIn pre-fills the cover-letter box with your previous application's letter**, addressed to that other company. The driver only filled *empty* boxes, so it kept the stale letter. Now any prefill is replaced by `answers.cover_letter`; with no letter supplied, the box is cleared and the page is **held** (`needs_cover_letter`), even when the slot is optional, so every letter is written for the position at hand. The same hold applies to a cover-letter *upload* slot.
+- **The document sent is the one the form asks for.** A "Resume" slot with no résumé prepared used to log `needs_resume` and carry on, and LinkedIn auto-selects the most recently used file, so the CV went out in its place. A CV slot where the CV can't be confirmed as selected is now held too (`needs_cv`), since the latest upload may be a résumé tailored for another posting. The form label decides, never the job description. Holds are skipped on the final review page, which only summarises earlier choices.
+- **New answer keys:** `gender`, for forms that make it a required field (only from `answers.json`, never inferred), and `currency`, for the currency picker next to a salary field.
 
 ### 2026-09-27 — LinkedIn search: new results layout
 

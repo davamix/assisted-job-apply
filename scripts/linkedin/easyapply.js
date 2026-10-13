@@ -47,6 +47,9 @@ const RULES = [
   { re: /linkedin profile|linkedin( |-)?url|perfil de linkedin/i, key: 'linkedin' },
   { re: /^\s*website\s*$|personal website|portfolio|sitio web|página web/i, key: 'website' },
   { re: /\bcity\b|ciudad|localidad/i, key: 'city' },
+  // Demographic select some employers make required. Answer only from answers.json (the
+  // candidate's own choice); with no `gender` key it stays blank for the human.
+  { re: /\bgender\b|g[eé]nero|\bsexo\b/i, key: 'gender' },
   // Threshold Yes/No experience question for the core stack (.NET/C#): phrased as a
   // yes/no ("do you have +5 years of .NET?"), so the numeric years_dotnet won't fit as a
   // radio answer. Must precede the numeric rule below. Handled specially in resolveAnswer:
@@ -67,6 +70,9 @@ const RULES = [
   { re: /teletrabaj|trabajar? en remoto|trabajo (en )?remoto|work remotely|remotely\?|remote work|work from home|comfortable working remotely/i, key: 'remote_work', choice: true },
   { re: /authoriz|eligible to work|legally|right to work|work permit|work permission|permit to work|autorizad|permiso de trabajo|permiso para trabajar|puedes trabajar|derecho a trabajar/i, key: 'authorized', choice: true },
   { re: /sponsor|visa|patrocin/i, key: 'sponsorship', choice: true },
+  // Currency picker that sits beside a salary field (radio or select). Before the salary rule
+  // so a legend like "Salary currency" picks a currency, not the salary figure.
+  { re: /currency|moneda|divisa/i, key: 'currency' },
   { re: /salary|compensation|expected pay|pretensiones|salarial|remuneraci/i, key: 'salary_target' },
   { re: /notice period|availab|disponibilidad|preaviso/i, key: 'notice' },
   { re: /how did you (hear|find out|learn|know)|d[oó]nde.*conoci|c[oó]mo.*conoci|source of application/i, key: 'hear_about' },
@@ -223,6 +229,9 @@ function enumerateInPage() {
   const MAX_STEPS = 10;
   for (let step = 0; step < MAX_STEPS; step++) {
     const info = await page.evaluate(enumerateInPage);
+    // Documents this step needs that we must not improvise: the page is held (no Next) so a
+    // position-specific letter / the right document can be prepared and the run repeated.
+    const holds = [];
 
     // Fill single fields.
     for (const f of info.fields) {
@@ -296,10 +305,38 @@ function enumerateInPage() {
       }
       if (clicked) filledLog.push({ q: (c.legend || '[unlabeled]').slice(0, 70), value: labelText });
     }
-    // Cover letter: paste into any empty textarea if provided and label looks like a letter/message.
+    // Cover letter textarea. Every letter is written for THIS position. LinkedIn pre-fills the
+    // box with the letter from your LAST Easy Apply (addressed to that other company), so a
+    // prefilled value is never kept: it is replaced by answers.cover_letter. With no letter
+    // supplied, the prefill is cleared and the step is HELD (needs_cover_letter), even when
+    // the slot is optional, so a position-specific letter gets written and the run repeated.
+    let letterSlot = false;
+    for (const f of info.fields) {
+      if (f.tag !== 'textarea' || !/cover|letter|carta|motivaci/i.test(f.label || '')) continue;
+      letterSlot = true;
+      const loc = page.locator(`[data-ez-field="${f.i}"]`);
+      try {
+        if (ans.cover_letter) {
+          // f.value is whitespace-normalized by enumerateInPage, so compare normalized.
+          if (f.value && f.value === ans.cover_letter.replace(/\s+/g, ' ').trim()) continue;
+          if (f.value) emit('stale_letter_replaced', { step, label: f.label, preview: f.value.slice(0, 80) });
+          await loc.fill(ans.cover_letter);
+          filledLog.push({ label: f.label, value: '[cover letter]' });
+        } else {
+          if (f.value) {
+            emit('stale_letter_cleared', { step, label: f.label, preview: f.value.slice(0, 80) });
+            await loc.fill('');
+            filledLog.push({ label: f.label, value: '[cleared stale prefill]' });
+          }
+          emit('needs_cover_letter', { step, label: f.label, kind: 'text' });
+          holds.push(`${f.label} (write one for this position)`);
+        }
+      } catch {}
+    }
+    // Other free-text message boxes ("additional information", "message") only when empty.
     if (ans.cover_letter) {
       for (const f of info.fields) {
-        if (f.tag === 'textarea' && !f.value && /cover|letter|message|carta|motivaci|additional/i.test(f.label || '')) {
+        if (f.tag === 'textarea' && !f.value && !/cover|letter|carta|motivaci/i.test(f.label || '') && /message|additional/i.test(f.label || '')) {
           try { await page.locator(`[data-ez-field="${f.i}"]`).fill(ans.cover_letter); filledLog.push({ label: f.label, value: '[cover letter]' }); } catch {}
         }
       }
@@ -313,7 +350,7 @@ function enumerateInPage() {
     // only fall back to the button's own text if no labelled field names a document. So
     // "Currículum" / "CV" → attach the default CV; only a genuine "Resume/Résumé" forces a
     // résumé. See scripts/common/classify-doc-field.js and the CV-vs-Résumé flow.
-    let docKind = 'unknown', wantResume = false;
+    let docKind = 'unknown', wantResume = false, docAsk = null;
     if (!resumeUploaded) {
       const doc = await page.evaluate(() => {
         const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
@@ -337,6 +374,7 @@ function enumerateInPage() {
         return { present: !!upCtl || !!label, label, hasUpload: !!upCtl };
       });
       if (doc.present) {
+        docAsk = doc;
         docKind = classifyDocField(doc.label);
         emit('doc_field', { step, label: doc.label, kind: docKind });
         // Attach a résumé ONLY when the field's own label is classified as a résumé. A CV /
@@ -358,39 +396,58 @@ function enumerateInPage() {
             filledLog.push({ label: 'Résumé (uploaded)', value: path.basename(ans.resume_upload) });
           } catch {}
         } else if (wantResume && !ans.resume_upload) {
-          // A résumé is required but none is prepared — hand to the human, don't attach the CV.
+          // A résumé is asked for but none is prepared. HOLD the step: LinkedIn auto-selects
+          // the most recently used file, so advancing would send whatever that is (the CV).
           emit('needs_resume', { step, label: doc.label });
         }
+        if (wantResume && !resumeUploaded) holds.push(`${doc.label} (attach a résumé for this position)`);
       }
     }
 
     // Ensure the intended CV is the selected document when the field is a CV ask (or we
     // did not upload a résumé). LinkedIn auto-selects the most recently uploaded file,
     // which may be a doc left over from a prior application.
+    // The CV radio's state: 'checked', 'unchecked' (tagged data-ez-cv), or 'missing'.
+    const cvRadioState = (hint) => page.evaluate((h) => {
+      const re = new RegExp(h, 'i');
+      const radios = [...document.querySelectorAll('input[type=radio]')];
+      for (const r of radios) {
+        let node = r, txt = '';
+        for (let i = 0; i < 5 && node; i++) { txt = (node.innerText || '').replace(/\s+/g, ' '); if (re.test(txt)) break; node = node.parentElement; }
+        if (re.test(txt)) { if (!r.checked) { r.setAttribute('data-ez-cv', '1'); return 'unchecked'; } return 'checked'; }
+      }
+      return 'missing';
+    }, hint);
+    let cvState = 'missing';
     if (ans.cv_filename_hint && !resumeUploaded && !wantResume) {
       try {
-        const needSelect = await page.evaluate((hint) => {
-          const re = new RegExp(hint, 'i');
-          const radios = [...document.querySelectorAll('input[type=radio]')];
-          for (const r of radios) {
-            let node = r, txt = '';
-            for (let i = 0; i < 5 && node; i++) { txt = (node.innerText || '').replace(/\s+/g, ' '); if (re.test(txt)) break; node = node.parentElement; }
-            if (re.test(txt)) { if (!r.checked) { r.setAttribute('data-ez-cv', '1'); return true; } return false; }
-          }
-          return false;
-        }, ans.cv_filename_hint);
-        if (needSelect) {
+        cvState = await cvRadioState(ans.cv_filename_hint);
+        if (cvState === 'unchecked') {
           const cvLoc = page.getByText(new RegExp(ans.cv_filename_hint.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).first();
           const ok = await cvLoc.click({ timeout: 2000 }).then(() => true).catch(() => false);
           if (!ok) await page.evaluate(() => { const el = document.querySelector('[data-ez-cv]'); if (el) { el.click(); el.dispatchEvent(new Event('change', { bubbles: true })); } });
-          filledLog.push({ label: 'Resume (CV) selected', value: ans.cv_filename_hint });
+          cvState = await cvRadioState(ans.cv_filename_hint);
+          if (cvState === 'checked') filledLog.push({ label: 'Resume (CV) selected', value: ans.cv_filename_hint });
         }
       } catch {}
     }
+    // A CV ask (or an unclassifiable one) on a step with a document picker: HOLD unless the CV
+    // is confirmed selected, so a file left over from another application (e.g. a résumé
+    // tailored for a different posting) is never sent in its place.
+    if (docAsk && docAsk.hasUpload && !wantResume && cvState !== 'checked') {
+      emit('needs_cv', { step, label: docAsk.label, hint: ans.cv_filename_hint || null });
+      holds.push(`${docAsk.label || 'Document'} (select the CV)`);
+    }
 
-    // Upload a cover-letter file if this page offers it (optional slot).
+    // Upload a cover-letter file if this page offers it (optional slot). No letter prepared and
+    // no letter textarea on this step either -> HOLD, same as the textarea case.
+    const coverBtn = page.getByRole('button', { name: /upload cover letter|adjuntar (la )?carta|subir carta/i }).first();
+    if (!coverUploaded && !ans.cover_letter_pdf && !letterSlot && await coverBtn.isVisible({ timeout: 800 }).catch(() => false)) {
+      emit('needs_cover_letter', { step, label: 'Cover letter', kind: 'file' });
+      holds.push('Cover letter upload (write one for this position)');
+    }
     if (ans.cover_letter_pdf && !coverUploaded) {
-      const btn = page.getByRole('button', { name: /upload cover letter|adjuntar (la )?carta|subir carta/i }).first();
+      const btn = coverBtn;
       if (await btn.isVisible({ timeout: 800 }).catch(() => false)) {
         try {
           const [chooser] = await Promise.all([
@@ -410,6 +467,20 @@ function enumerateInPage() {
     emit('step', { step, heading: info.heading, foot: info.footLabel, fields: info.fields.map((f) => ({ label: f.label, tag: f.tag, options: f.options })), choices: info.choices.map((c) => ({ legend: c.legend, options: c.options.map((o) => o.label) })), shot });
 
     const isFinal = info.footLabel && /submit application|enviar solicitud/i.test(info.footLabel);
+    // The review page only summarises earlier choices (no fields, no radios) yet still names
+    // the document ("Currículum"), so document holds there would be false alarms.
+    const isSummary = isFinal && !info.fields.length && !info.choices.length;
+
+    // A held document stops the run on THIS page (before Next), like a blocked required field.
+    if (holds.length && !isSummary) {
+      blocked = true;
+      unfilled = holds;
+      const shotH = path.join(shotDir, `blocked-${step}.png`);
+      await page.screenshot({ path: shotH }).catch(() => {});
+      emit('needs_input', { step, heading: info.heading, shot: shotH, unfilled: holds });
+      break;
+    }
+
     if (isFinal) break;
 
     // Advance.

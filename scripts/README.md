@@ -190,8 +190,16 @@ A portal adapter should:
 
 - **linkedin** — the logged-in DOM is fully obfuscated (hashed CSS classes); scripts rely
   on accessible labels/roles and anchors like the "About the job" heading, not classes.
-  The résumé is *selected* from LinkedIn's already-uploaded files by `cv_filename_hint`
-  (a radio), not uploaded fresh.
+  The document sent is the one the form asks for. A CV ask ("Currículum", "CV") *selects*
+  the CV from LinkedIn's already-uploaded files by `cv_filename_hint` (a radio); a
+  "Resume" ask uploads `answers.resume_upload` fresh. LinkedIn auto-selects the most
+  recently used file, so if the right document can't be confirmed (no résumé prepared, CV
+  radio not found) the driver **holds that page** (`needs_resume` / `needs_cv` →
+  `needs_input`) instead of advancing. LinkedIn also **pre-fills the cover-letter box with
+  your previous application's letter**: it is always replaced by `answers.cover_letter`,
+  and with no letter supplied it is cleared and the page held (`needs_cover_letter`), so
+  every letter is written for the position at hand. Holds are skipped on the final review
+  page, which only summarises earlier choices.
 - **bamboohr** — custom "Fabric" dropdowns reject Playwright's native `selectOption`
   (Address is left to the human); Country/State use hidden native `<select>`s that do
   accept it; there is a `g-recaptcha-response` the human solves and a `nickname_hpcsaf`
