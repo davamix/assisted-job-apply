@@ -10,25 +10,38 @@
   },
   "searches": [
     {
-      "tag": ".NET + AI/RAG",
+      "tag": ".NET Developer",
+      "keywords": ".NET Developer",
+      "pages": 2,
+      "note": "Broad C#/.NET backend and full-stack; the largest pool."
+    },
+    {
+      "tag": "Desarrollador .NET",
+      "keywords": "Desarrollador .NET",
+      "pages": 2,
+      "note": "Spanish-language postings that the English keywords miss."
+    },
+    {
+      "tag": "Senior .NET Engineer",
+      "keywords": "Senior .NET Engineer",
+      "note": "Senior/lead/staff C#/.NET."
+    },
+    {
+      "tag": "C# WPF",
+      "keywords": "C# WPF",
+      "note": "Desktop C#/WPF. Many results are hybrid or on-site."
+    },
+    {
+      "tag": ".NET AI Engineer",
       "keywords": ".NET AI Engineer",
       "note": "Best fit: C#/.NET with AI/RAG/LLM (Acopio, YAOCr)."
     },
     {
-      "tag": "Senior/Lead .NET",
-      "keywords": "Senior .NET Engineer",
-      "note": "Broad C#/.NET backend, senior/lead/staff."
-    },
-    {
-      "tag": "AI/ML Engineer (LLM)",
+      "tag": "AI Engineer LLM RAG",
       "keywords": "AI Engineer LLM RAG",
-      "note": "AI/ML roles centred on LLMs/RAG/vector search (C# or Python)."
-    },
-    {
-      "tag": "Software Engineer",
-      "keywords": "Software Engineer .NET",
-      "note": "Generalist remote SWE listing C#/.NET or AI as a plus."
+      "pages": 2,
+      "note": "AI roles centred on LLMs/RAG/agents (C# or Python)."
     }
   ],
-  "_comment": "datePostedDays: 7=past week, 1=24h. remote maps to LinkedIn f_WT=2. Add {name,geoId} entries to locations to widen markets (e.g. European Union geoId 91000000). Remote-from-Spain eligibility is decided at triage time, not here."
+  "_comment": "datePostedDays: 7=past week, 1=24h. pages: how many result pages of 25 to read (default 1). remote maps to LinkedIn f_WT=2. Add {name,geoId} entries to locations to widen markets (e.g. European Union geoId 91000000). Remote-from-Spain eligibility is decided at triage time, not here."
 }

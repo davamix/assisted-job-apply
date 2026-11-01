@@ -284,9 +284,9 @@ A portal adapter should:
   `#first_name`). Traps:
   - **Finding the apply URL from LinkedIn:** the apply control may be an **`<a>` whose href
     wraps a `grnh.se` short link** (inside a `linkedin.com/safety/go/?url=…` redirect), not a
-    `<button>`. `job-detail.js --captureExternal` only follows `<button>`s, so it reports
-    `apply_type:"unknown"` with a null `external_url` — read the `<a>`'s `href` out of the DOM
-    and resolve it with `curl -sIL` to get the real board URL.
+    `<button>`. `job-detail.js` now reads such links and unwraps the redirect into
+    `external_url`, but a `grnh.se` short link is still short — resolve it with `curl -sIL` to
+    get the real board URL.
   - **Not every Greenhouse form has comboboxes.** Speechify's had **none** — 4 plain
     text/textarea custom questions (`type:"text"` / `"textarea"` in `answers.screening[]`, both
     handled by the same `fillById` branch). Probe first; don't assume the react-select path.

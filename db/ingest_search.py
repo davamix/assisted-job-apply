@@ -5,8 +5,10 @@ Usage:
   python db/ingest_search.py --file search-out.json --tag ".NET + AI/RAG" [--source linkedin]
 
 Each input item looks like: {source_job_id, role, company, location, url}
-Maps to a DB row and upserts (dedup on source+source_job_id). Country is parsed from
-the location string (e.g. "Spain (Remote)" -> "Spain"). Prints a summary.
+Maps to a DB row and inserts it (dedup on source+source_job_id). A job that is already in
+the DB is left untouched and listed under "existing": re-ingesting it must not reset an
+applied/skipped row back to "found". Country is parsed from the location string
+(e.g. "Spain (Remote)" -> "Spain"). Prints a summary.
 """
 import argparse
 import json
@@ -37,9 +39,17 @@ def main():
     with open(args.file, "r", encoding="utf-8") as f:
         items = json.load(f)
 
-    inserted, updated = 0, 0
+    inserted, existing = 0, []
     with jobs_db.connect() as conn:
         for it in items:
+            known = conn.execute(
+                "SELECT id, status FROM jobs WHERE source = ? AND source_job_id = ?",
+                (args.source, str(it.get("source_job_id"))),
+            ).fetchone()
+            if known is not None:
+                existing.append({"id": known["id"], "status": known["status"],
+                                 "source_job_id": str(it.get("source_job_id"))})
+                continue
             row = {
                 "source": args.source,
                 "source_job_id": str(it.get("source_job_id")),
@@ -51,13 +61,10 @@ def main():
                 "search_tag": args.tag,
                 "status": "found",
             }
-            res = jobs_db.upsert_one(conn, row)
-            if res["_action"] == "inserted":
-                inserted += 1
-            else:
-                updated += 1
+            jobs_db.upsert_one(conn, row)
+            inserted += 1
         conn.commit()
-    print(json.dumps({"ingested": len(items), "inserted": inserted, "updated": updated, "tag": args.tag}))
+    print(json.dumps({"ingested": len(items), "inserted": inserted, "existing": existing, "tag": args.tag}))
 
 
 if __name__ == "__main__":
