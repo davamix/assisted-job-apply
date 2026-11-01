@@ -259,11 +259,14 @@ python db/ingest_search.py --file search.json --tag ".NET + AI/RAG"
 - `--geoId` = LinkedIn's location id. Find it by running a Jobs search in your browser and copying
   the `geoId=` value from the URL (e.g. Spain = `105646813`).
 - Add `--headed` to watch the browser; omit for headless.
+- Jobs already in the database are left as they are (listed under `existing` in the summary), so
+  re-running a search never resets an applied or skipped job back to `found`.
 
 **3. Triage a job:**
 ```bash
 node scripts/linkedin/job-detail.js --id <linkedinJobId>
-# returns description, apply_type (easy_apply | external | closed | already_applied), salary hint…
+# returns description, apply_type (easy_apply | external | closed | already_applied),
+# external_url when the apply control is a link, LinkedIn's salary band, applicant count, salary hint…
 ```
 Decide fit, then record it, e.g.:
 ```bash
@@ -391,6 +394,13 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
+
+### 2026-11-01 — Job detail reads the header and link-style apply controls; re-ingest is safe
+
+- **`job-detail.js` reported closed postings as open.** The job header ("No longer accepting applications", the apply control, LinkedIn's salary band) renders after the description, and a fixed 3 s wait read the page too early. It now waits until the description heading and an apply/closed/applied marker are both present, and reads the header from the page body, since on some layouts the header sits outside `<main>`.
+- **Link-style apply controls are recognised.** Many postings use an `<a>` ("Apply on company website", "Easy Apply to this job") rather than a `<button>`, and came back as `apply_type: "unknown"` — which looked like a broken posting but covered both Easy Apply and external sites. The first apply control before the description heading is now read whatever its tag, and an external link's `linkedin.com/safety/go/?url=…` wrapper is unwrapped into `external_url` without clicking anything.
+- **New fields:** `salary_band` (LinkedIn's own band, e.g. `25K EUR/yr - 35K EUR/yr + Bonus`, which never appears in the description), `applicants` and a short `header` excerpt. The "see more" expander now clicks buttons inside `<main>` only, because links labelled "more" navigate away.
+- **`db/ingest_search.py` no longer touches jobs that are already in the database.** It wrote `status: "found"` for every item, so re-ingesting a card that came back in a later search reset an applied or skipped job to `found` and overwrote its search tag. Existing jobs are now skipped and listed under `existing` in the summary.
 
 ### 2026-10-13 — Easy Apply: position-specific letters, the document the form asks for ([#16](https://github.com/davamix/assisted-job-apply/pull/16))
 
