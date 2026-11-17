@@ -100,7 +100,9 @@ Worth knowing before you use one:
   appends duplicates; the adapter skips re-uploading a file it already finds attached.
 - **BambooHR** leaves Address/ZIP to you and has a reCAPTCHA you solve before submitting.
 - **Teamtailor** hides a cookie wall in front of the form and opens the application as an in-page
-  overlay; its dropdowns reject a forced value and will block the submit if faked.
+  overlay; its dropdowns reject a forced value and will block the submit if faked, and its salary
+  slider only shows a value that arrived through real key events. Many companies serve it from
+  their own domain (`careers.<company>.com`), recognisable by its `teamtailor-cdn` assets.
 - **Bizneo** is a public form (no login). Its Country/City are select2 widgets — City is a *remote
   autocomplete*, and setting the native value never fires the country→city cascade — and the dates
   use a JS datepicker, so the adapter drives all three through their real UI, not raw values. It
@@ -394,6 +396,11 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
+
+### 2026-11-17 — Teamtailor: salary sliders and dropdowns without search text
+
+- **Salary range sliders are filled, and the page shows the filled value.** A Teamtailor range question hides the real `<input type=range>` under a custom slider and refreshes its large displayed number only on a *trusted* change event. Filling the input changed what would be submitted but left the number at the 10 000 minimum, so the person at the gate saw the wrong figure. The adapter now steps the focused slider with arrow keys, and reports the value as filled only once the submitted value and the displayed number both match.
+- **Dropdown options are matched by their text.** Some forms' dropdown menu items carry no `data-search-text`, so the English-level question was left unanswered. Options now match on `data-search-text`, then on their visible text, then on `data-value` against the radio's value. The `isChecked()` confirmation is unchanged.
 
 ### 2026-11-01 — Job detail reads the header and link-style apply controls; re-ingest is safe
 
