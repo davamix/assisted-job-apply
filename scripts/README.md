@@ -216,7 +216,19 @@ A portal adapter should:
     clickable. Open the trigger and click the panel's `<button data-search-text="…">`, and
     let the controller check the radio: forcing `checked` leaves the component's own
     `required` validation input empty and the form rejects the submit with "You must select
-    an option". Plain (non-dropdown) choice groups are clicked by label as usual.
+    an option". Plain (non-dropdown) choice groups are clicked by label as usual. Not every
+    form puts `data-search-text` on those menu items (WorkFlex's carry only their text and a
+    `data-value`), so items are matched on search text, then visible text, then `data-value`.
+  - **Range questions** (`forms--inputs--range`, e.g. salary) hide the real
+    `<input type=range>` (opacity 0) under a custom slider and show the value as a large
+    number that the controller refreshes only on a **trusted** `change` (`handleChange`
+    checks `isTrusted`). `fill()` changes the submitted value but not the number or the
+    handle. The "edit number" box (`editNumber` → `onNrInputInput`) fires a synthetic
+    `change` and races its own deferred `focus()`. Arrow keys on the focused slider are real
+    events and land every time; the adapter checks both the input's value and the number shown.
+
+  Teamtailor is often served from the company's own domain (`careers.workflex.com`); its
+  pages load assets from `teamtailor-cdn.com`, which identifies the adapter to use.
 
   Screening questions are matched on **wording, not `answers_attributes` index** — those
   indices are positional and shift when the posting is edited. The question wording is

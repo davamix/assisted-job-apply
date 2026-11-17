@@ -6,8 +6,9 @@
 //  - a cookie consent wall covers the page and swallows the first click;
 //  - APPLY opens an in-page Stimulus overlay, not a new URL;
 //  - fields are Rails-named: candidate[first_name], candidate[answers_attributes][N][choice];
-//  - screening questions come as radio groups, multi-select checkbox groups, or free text,
-//    and some are wrapped in custom comboboxes whose inputs are not directly clickable.
+//  - screening questions come as radio groups, multi-select checkbox groups, free text, or a
+//    range slider (salary), and some are wrapped in custom comboboxes or sliders whose real
+//    inputs are not directly usable (see setRange and the dropdown branch below).
 //
 // Anything it cannot fill confidently is emitted as `screening-unanswered` and left for the
 // human rather than guessed at. Questions are matched on wording, not index, since the
@@ -58,6 +59,39 @@ async function acceptCookies(page) {
     if (await b.count()) { await b.click({ timeout: 3000 }).catch(() => {}); return t; }
   }
   return null;
+}
+
+// A range question (forms--inputs--range) hides the real <input type=range> under a custom
+// slider and shows its value as a large number. The controller refreshes that number only on
+// a TRUSTED change event (handleChange checks isTrusted), so:
+//  - fill() on the range input changes what is submitted but not the number or the handle,
+//    and at the gate a 50000 still read as the 10000 minimum;
+//  - its "edit number" box (editNumber -> onNrInputInput) fires a synthetic change, and
+//    whether the number refreshes depends on a race with the box's deferred focus: it
+//    showed 10000 above a typed 60000 in a headed run.
+// Arrow keys on the focused slider are real key events: value, number and handle agree
+// every time (6/6 headed and headless, 2026-11-17). Believe it only once the submitted value
+// AND the shown number both read the wanted figure.
+async function setRange(page, name, want) {
+  const v = String(want).replace(/\D/g, '');
+  const slider = page.locator(`[name="${name}"]`).first();
+  const root = page.locator(`[data-controller~="forms--inputs--range"]:has([name="${name}"])`).first();
+  try {
+    const { cur, step, min, max } = await slider.evaluate(el => ({
+      cur: Number(el.value), step: Number(el.step) || 1, min: Number(el.min), max: Number(el.max),
+    }));
+    const target = Number(v);
+    if (!v || target < min || target > max) return { ok: false, value: String(cur), note: `outside ${min}-${max}` };
+    const n = Math.round((target - cur) / step);
+    if (Math.abs(n) > 2000) throw new Error(`too many steps (${n})`);
+    await slider.focus();
+    for (let i = 0; i < Math.abs(n); i++) await page.keyboard.press(n > 0 ? 'ArrowRight' : 'ArrowLeft');
+  } catch (e) { /* judged by the checks below */ }
+  await page.waitForTimeout(300);
+  const got = await slider.inputValue().catch(() => null);
+  const shown = await root.locator('[data-forms--inputs--range-target="value"]').first().textContent({ timeout: 1000 })
+    .then(t => t.replace(/\D/g, '')).catch(() => null);
+  return { ok: !!v && got === v && (shown == null || shown === v), value: got, shown };
 }
 
 (async () => {
@@ -199,6 +233,8 @@ async function acceptCookies(page) {
         const lab = (id && document.querySelector(`label[for="${CSS.escape(id)}"]`)) || el.closest('label');
         const txt = norm(lab && lab.textContent);
         if (txt) g.choices.push(txt);
+      } else if (type === 'range') {
+        g.type = 'range';
       } else {
         g.type = 'text';
       }
@@ -219,6 +255,18 @@ async function acceptCookies(page) {
       continue;
     }
 
+    if (group.type === 'range') {
+      const r = await setRange(page, group.name, want);
+      if (r.ok) {
+        filled.push({ field: group.question, value: r.value });
+      } else {
+        unanswered.push({ index: group.index, question: group.question, type: group.type, wanted: String(want), got: r.value,
+          note: `set it by hand; the page shows ${r.shown ?? '?'}` + (r.note ? ` (${r.note})` : '') });
+        emit('range-failed', { index: group.index, question: group.question, wanted: String(want), got: r.value, shown: r.shown, note: r.note });
+      }
+      continue;
+    }
+
     if (group.type === 'text') {
       try {
         const loc = page.locator(`[name="${group.name}"]`).first();
@@ -231,7 +279,9 @@ async function acceptCookies(page) {
     //  - plain choice buttons, whose label is directly clickable;
     //  - a Stimulus dropdown (forms--inputs--choice, show-as-dropdown-value="true"). Its
     //    radios are sr-only and live OUTSIDE the panel, so label[for=…] is never clickable;
-    //    the panel holds <button data-search-text="…"> menu items that call selectRadio.
+    //    the panel holds <button> menu items that call selectRadio. Some forms label the
+    //    items with data-search-text; others (WorkFlex, 2026-11) carry only their text and a
+    //    data-value, so match on either, and fall back to data-value = the radio's value.
     //    Open the panel, click the menu item, and let the controller check the radio —
     //    forcing `checked` directly leaves the component's own required validation input
     //    empty ("You must select an option"), which silently blocks submit later.
@@ -252,8 +302,11 @@ async function acceptCookies(page) {
             const panel = root && root.querySelector('[data-common--dropdown-target="dropdown"]');
             let optionId = null;
             if (panel) {
-              const item = [...panel.querySelectorAll('[data-common--dropdown-target="menuItem"]')]
-                .find(b => norm(b.getAttribute('data-search-text')).toLowerCase() === String(w).toLowerCase());
+              const items = [...panel.querySelectorAll('[data-common--dropdown-target="menuItem"]')];
+              const want = String(w).toLowerCase();
+              const item = items.find(b => norm(b.getAttribute('data-search-text')).toLowerCase() === want) ||
+                items.find(b => norm(b.textContent).toLowerCase() === want) ||
+                items.find(b => el.value && b.getAttribute('data-value') === el.value);
               if (item) {
                 if (!item.id) item.id = 'tt-opt-' + Math.random().toString(36).slice(2, 9);
                 optionId = item.id;
