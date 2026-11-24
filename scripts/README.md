@@ -2,8 +2,8 @@
 
 Automation scripts, organized as **site-agnostic common utilities** plus **one folder per
 job portal**. The tool started LinkedIn-only and now supports external ATS portals
-(BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby, TalentClue and
-Connexys, with Lever likely to follow), so each portal is an *adapter* implementing only the
+(BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby, TalentClue,
+Connexys and Deel, with Lever likely to follow), so each portal is an *adapter* implementing only the
 capabilities it supports.
 
 ## Layout
@@ -39,6 +39,8 @@ scripts/
     probe-fields.js          # reconnaissance used to build a job's answers.json
   connexys/                  # Connexys ATS external-apply adapter (apply only)
     apply.js
+  deel/                      # Deel ATS ("Hire with Deel") external-apply adapter (apply only)
+    apply.js
   workday/                   # Workday external-apply adapter (session + apply)
     login.js  verify.js      # per-tenant candidate session -> .auth/workday-<tenant>-state.json
     session.js               # shared "is this session signed in?" probe
@@ -48,7 +50,7 @@ scripts/
 
 Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `config/`,
 `.auth/` resolve. The npm aliases in `package.json` wrap the common invocations
-(`npm run login|verify|search|detail|apply|apply:bamboohr|apply:teamtailor|apply:bizneo|apply:workable|apply:greenhouse|apply:viterbit|apply:ashby|apply:talentclue|apply:connexys|apply:workday|pdf`).
+(`npm run login|verify|search|detail|apply|apply:bamboohr|apply:teamtailor|apply:bizneo|apply:workable|apply:greenhouse|apply:viterbit|apply:ashby|apply:talentclue|apply:connexys|apply:deel|apply:workday|pdf`).
 
 ## Capability matrix
 
@@ -64,6 +66,7 @@ Run everything from the repo root (`f:\JobSearch`) so `output/`, `assets/`, `con
 | ashby      | –                      | –      | –                   | ✓                         |
 | talentclue | –                      | –      | –                   | ✓                         |
 | connexys   | –                      | –      | –                   | ✓                         |
+| deel       | –                      | –      | –                   | ✓                         |
 | workday    | ✓ (per tenant)         | –      | –                   | ✓                         |
 
 External ATS sites are reached via the "Apply on company website" link found during
@@ -403,6 +406,40 @@ A portal adapter should:
   - UUID ids frequently **start with a digit**, which is an invalid bare CSS selector
     (`#4095773f-…` throws). Use an attribute selector or escape it; the adapter matches by label
     wording and sidesteps this entirely.
+
+- **deel** — Deel's own ATS ("Hire with Deel"): a public, no-login Material UI form at
+  `jobs.deel.com/<org>/job-details/<jobId>/application`, used by Deel for its own roles (org
+  `deel`) and by employers hiring through Deel. LinkedIn's link for Deel's own postings lands
+  on `www.deel.com/careers/job/?ats_id=<uuid>`, a marketing page whose ids are **Ashby** ids,
+  but Ashby's hosted form (`jobs.ashbyhq.com/Deel/<id>`) is a 404 and the page has none of
+  Ashby's `_systemfield_*` ids, so the Ashby adapter does not apply; `toApplyUrl()` rewrites
+  both URL shapes straight to the form. First seen on id 392.
+  - **Identity fields have stable `name`s:** `firstName`, `lastName` (first and last are
+    separate here), `email`, `phoneNumber_dialCode`, `phoneNumber`, `linkedinProfileUrl`.
+  - **Every posting-specific question is a `[data-field-id=<uuid>]` block** with its wording in
+    an h4 Typography. `answers.screening[]` entries match by `question_id` (that uuid) or by
+    `label_contains`, and the widget is detected per block (radio, select, multi-select, text,
+    checkbox). A question with no entry, or with `value: null`, is reported for the human with
+    its choices and the entry's `verify` note: that is how a "your call" question is handed over.
+  - **Dropdowns are MUI Autocompletes**, not `<select>`s: a value counts only once an option is
+    **clicked**. Long lists are **virtualised** (only a screenful of `<li>` exists), and the
+    dial-code list filters on the country name or ISO code ("Spain", "ES") but **not** on
+    "+34", so typing the code finds nothing. The adapter types `answers.phone_country` /
+    `answers.country` first, then scrolls the listbox until the option shows. After the pick
+    the input displays only "+34" (the option reads "ES +34").
+  - **Yes/No questions are real radio groups**, so re-clicking the chosen option is harmless
+    (unlike Ashby's toggles).
+  - **One file input**: the résumé dropzone, a hidden `input[type=file]` whose `aria-label`
+    holds the employer's wording ("Please upload your resume as a PDF file. It must be submitted
+    in English."). That label decides CV vs résumé. The "Upload your resume to autofill" banner
+    is a separate button and is never touched. The adapter uploads first and re-checks identity
+    afterwards anyway.
+  - A **Talent Pool** consent box (other employers can find the profile) is optional and left
+    to the human; it is not a privacy-policy acceptance. **Apply stays disabled** until every
+    required question is answered.
+  - No captcha markers at first sight; the anti-detection flags are always-on and
+    `--channel msedge` is available. `page.goto` must wait for `load`, not `networkidle`: the
+    page never idles.
 
 - **workday** — the only portal so far needing an **account**: sign in once with
   `workday/login.js` (per tenant — a Workday account with one employer does not work for
