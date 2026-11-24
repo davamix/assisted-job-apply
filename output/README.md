@@ -36,7 +36,7 @@ Common fields the Easy Apply driver understands:
 - External-form extras (BambooHR): `country`, `state` (native-select labels), `desired_pay` (or derived from `salary_target`), and `screening` — a map of Yes/No screening answers, either `{ "customQuestionAnswers.yes_no_129": "Yes", … }` (by field name) or `[ { "question": "regex", "answer": "No" }, … ]` (by question text)
 - External-form extras (Connexys): `postcode`, `contract_type` (the option wording, e.g. `"CDI"` for a permanent contract), `availability` (e.g. `"Immédiate"`), `rqth` (the French disability-accommodation question), and `link_url` for the LinkedIn profile field. Any of these left `null` is reported as `pending` at the review gate rather than guessed — the postcode and RQTH answers are personal data that may deliberately not be on record.
 
-- Screening entries (Greenhouse, Viterbit) may also carry `question_id` (the portal's own id, matched first) with `label_contains` as the wording fallback, plus an optional `verify` note — text shown back to you at the review gate for an answer that was filled but only you can confirm (a personal fact, or a figure that departs from `config/profile.json`)
+- Screening entries (Greenhouse, Viterbit, Deel) may also carry `question_id` (the portal's own id, matched first) with `label_contains` as the wording fallback, plus an optional `verify` note — text shown back to you at the review gate for an answer that was filled but only you can confirm (a personal fact, or a figure that departs from `config/profile.json`)
 
 Most of these can be generated from `config/profile.json`; per-job files let you override anything
 (e.g. tailored experience numbers or a job-specific cover letter).

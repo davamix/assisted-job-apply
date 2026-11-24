@@ -45,7 +45,7 @@ everything.
 - ✅ **Apply** through the multi-step Easy Apply form — filling contact info, screening questions,
   compliance attestations, selecting the right resume, uploading a cover letter — then **stopping at
   the review page for your approval**.
-- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby, TalentClue and Connexys today) have
+- 🏢 **External ATS portals** (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby, TalentClue, Connexys and Deel today) have
   their own *apply adapters* that fill the company form and pause for you to review and submit — same
   never-auto-submit rule. See [Adapters](#adapters).
 
@@ -90,6 +90,7 @@ screenshot, and **stop before submit**.
 | **Ashby** | apply | `npm run apply:ashby -- --url <apply-url> --id <dbId>` |
 | **TalentClue** | apply | `npm run apply:talentclue -- --url <job-or-apply-url> --id <dbId>` |
 | **Connexys** | apply | `npm run apply:connexys -- --url <job-or-apply-url> --id <dbId>` |
+| **Deel** | apply | `npm run apply:deel -- --url <careers-or-apply-url> --id <dbId>` |
 | **Workday** | session (per tenant) · apply | `npm run login:workday -- --tenant <tenant-url>`, then `npm run apply:workday -- --url <job-url> --id <dbId>` |
 
 Worth knowing before you use one:
@@ -156,6 +157,13 @@ Worth knowing before you use one:
   **most fields in the DOM are the recruiter's own hidden back-office fields** — including "Origine"
   and "Plateforme", which look like source-tracking you should answer but are not yours to set. Only
   visible fields are touched. Supports `--dryRun`.
+- **Deel** ("Hire with Deel") is Deel's own ATS at `jobs.deel.com`, used for Deel's roles and by employers
+  hiring through Deel. LinkedIn's link for a Deel role opens `www.deel.com/careers/job/?ats_id=…`, whose ids
+  are Ashby ids, but the form is **not** an Ashby form; the adapter takes either URL. Posting questions are
+  matched by their wording or uuid, dropdowns are searchable lists whose long options load as you scroll
+  (the dial code filters on "Spain"/"ES", not "+34"), and an optional **Talent Pool** box is left for you.
+  A screening entry with `"value": null` and a `verify` note hands a question to you with its evidence.
+  Supports `--dryRun`.
 
 - **Some portals gate the final Submit with an anti-bot challenge** (Cloudflare Turnstile, hCaptcha,
   reCAPTCHA) that rejects Playwright's bundled Chromium by its automation fingerprint, so the "Verify
@@ -192,6 +200,7 @@ full per-site quirk list — read it before adding a portal.
 | `scripts/ashby/apply.js` | Fill an Ashby external form and pause for you to submit. |
 | `scripts/talentclue/apply.js` | Fill a TalentClue external form and pause for you to submit. |
 | `scripts/connexys/apply.js` | Fill a Connexys external form and pause for you to submit. |
+| `scripts/deel/apply.js` | Fill a Deel ("Hire with Deel") external form and pause for you to submit. |
 | `scripts/workday/login.js` · `verify.js` | Per-tenant Workday candidate session → `.auth/`. |
 | `scripts/workday/apply.js` | Walk Workday's 5-step wizard and stop at Review. |
 | `scripts/<site>/probe-fields.js` | Read-only recon of a form, to build its `answers.json`. |
@@ -377,7 +386,7 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
   accessible labels/roles and stable text anchors, but LinkedIn changes its UI often — if a
   selector breaks, the diagnostic pattern in `docs/ARCHITECTURE.md` shows how to inspect and fix it.
 - **External application sites** — [supported portals](#adapters) have an *apply adapter* under
-  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby, TalentClue, Connexys). Anything else (Lever, …) is
+  `scripts/<site>/` (BambooHR, Teamtailor, Bizneo, Workable, Workday, Greenhouse, Viterbit, Ashby, TalentClue, Connexys, Deel). Anything else (Lever, …) is
   logged for you to complete manually. Adapters fill the form and pause — you review and submit (never
   auto-submitted).
 - **"Verify you are human" fails at submit** — a Cloudflare Turnstile / reCAPTCHA (or similar) is rejecting
@@ -396,6 +405,13 @@ Portal-agnostic schema so other job boards can be added later. Full schema + CLI
 
 Newest first. Entry format: `### YYYY-MM-DD — Specific title`, followed by its PR link where there
 is one, then one bullet per notable change — not one per commit.
+
+### 2026-11-24 — Deel adapter
+
+- **Deel supported** — `scripts/deel/apply.js`, the eleventh ATS. Deel's own ATS ("Hire with Deel") serves a public Material UI form at `jobs.deel.com/<org>/job-details/<id>/application`. LinkedIn's link for Deel's own roles opens a `www.deel.com/careers/job/?ats_id=<uuid>` marketing page whose ids are **Ashby** ids, yet Ashby's hosted form for them is a 404 and the page carries none of Ashby's field ids, so the Ashby adapter cannot fill it. The new adapter rewrites either URL to the form, and `apply.py` routes any `deel.com` domain to it.
+- **Questions are matched by uuid or wording, and the widget is detected per question.** Each posting question is a `[data-field-id]` block, answered from `answers.screening[]` by `question_id` or `label_contains` as a radio, single or multi-select, text or checkbox. A question with no entry, or with `"value": null` and a `verify` note, is listed at the gate with its choices and that note, which is how a question only the applicant can answer is handed over with its evidence.
+- **Searchable dropdowns with lists that load as you scroll.** A value counts only once an option is clicked, and only a screenful of a long list exists in the page at a time. The dial-code list filters on the country name or ISO code but not on "+34", so the adapter types the country first and otherwise scrolls the list until the option appears; after the pick the field shows only "+34", which the check accepts.
+- **The résumé slot's wording lives in the hidden file input's `aria-label`**, and it decides CV vs résumé as on every other portal. The "upload your resume to autofill" banner is never touched, and identity fields are re-checked after the upload.
 
 ### 2026-11-17 — Teamtailor: salary sliders and dropdowns without search text
 
